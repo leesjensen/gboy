@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #f8f7f1;
+  --color-forest: #203f30;
+  --color-forest-light: #31543f;
+  --color-sage: #879b79;
+  --color-sage-pale: #e8ede1;
+  --color-coral: #c65f45;
+  --color-coral-pale: #f2ded5;
+  --color-gold: #c49747;
+  --color-gold-pale: #f3e8ca;
+  --color-rose: #ead7d1;
+  --color-blue: #dce7e5;
+  --font-sans: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+:root {
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+  background: #f8f7f1;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f8f7f1;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: #d8e3d0;
+  color: #203f30;
+}
+
+.plate-shadow {
+  box-shadow: 0 28px 50px -25px rgba(32, 63, 48, 0.33), 0 4px 14px rgba(32, 63, 48, 0.08);
+}
+
+.category-card.tint-coral,
+.recipe-art.tint-coral,
+.category-pill.tint-coral { background-color: #f1ddd5; }
+.category-card.tint-gold,
+.recipe-art.tint-gold,
+.category-pill.tint-gold { background-color: #f1e7ca; }
+.category-card.tint-blue,
+.recipe-art.tint-blue,
+.category-pill.tint-blue { background-color: #dce7e5; }
+.category-card.tint-sage,
+.recipe-art.tint-sage,
+.category-pill.tint-sage { background-color: #e5ebdf; }
+.category-card.tint-rose,
+.recipe-art.tint-rose,
+.category-pill.tint-rose { background-color: #f0e1dc; }
+
+.recipe-art {
+  background-image: radial-gradient(circle at 80% 15%, rgba(255, 255, 255, 0.62), transparent 32%), linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 58%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
