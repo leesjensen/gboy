@@ -32,8 +32,14 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Build
-        run: npm run build # The built site `dist` directory
+        run: |
+          # Fail instead of deploying a site that can't reach the recipe database.
+          for name in VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; do
+            [ -n "${!name}" ] || { echo "::error::$name is not set. Add it as a repository variable under Settings > Secrets and variables > Actions > Variables."; exit 1; }
+          done
+          npm run build # The built site `dist` directory
         env:
+          # Repository variables; the anon key is public, and RLS protects the data.
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
 
