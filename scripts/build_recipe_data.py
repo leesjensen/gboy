@@ -222,35 +222,107 @@ def slugify(value):
     return slug or "recipe"
 
 
+NOTE_START = re.compile(
+    r"^(?:\*|notes?\b|tips?\b|hint\b|variations?\b|options?\b|optional\b|source\b|from\b|recipe from\b|adapted\b|this (?:recipe|is)\b|these (?:are|freeze)\b)",
+    re.I,
+)
+NUMBERED_STEP = re.compile(r"^\d+[.)]\s")
+SENTENCE_END = (".", "!", "?")
+# Words that end in a period without ending a sentence.
+ABBREVIATIONS = {
+    "approx", "c", "doz", "dr", "e.g", "etc", "ea", "env", "gal", "hr", "hrs", "i.e", "lb", "lbs", "med",
+    "min", "mins", "mr", "mrs", "no", "oz", "pkg", "pkgs", "pt", "qt", "sm", "lg", "st", "t", "tbsp", "tbs",
+    "tsp", "vs", "deg", "temp",
+}
+# Sentences shorter than this stay with the sentence before them ("Drain and peel.").
+SHORT_SENTENCE = 30
+
+
 def classify_line(text):
-    if META_START.match(text):
+    if META_START.match(text) and len(text) < 60:
         return "meta"
     if text.endswith(":") and len(text) < 70:
         return "label"
-    if STEP_START.match(text) or (len(text) > 100 and re.search(r"\b(?:until|minutes?|degrees?|stir|cook|bake|serve)\b", text, re.I)):
-        return "step"
-    if INGREDIENT_START.match(text):
+    if INGREDIENT_START.match(text) and not NUMBERED_STEP.match(text) and (len(text) < 95 or not text.endswith(".")):
         return "ingredient"
-    if len(text) < 95 and not text.endswith((".", "!", "?")):
+    if len(text) < 60 and not text.endswith(SENTENCE_END) and not STEP_START.match(text):
         return "ingredient"
-    return "note"
+    return "prose"
+
+
+def is_prose_line(text):
+    """True for a PDF line that is part of a paragraph rather than a list item."""
+    return len(text) >= 60 or STEP_START.match(text) is not None or text.endswith(SENTENCE_END)
+
+
+def join_wrapped_lines(lines):
+    """Rejoin the visual PDF lines that make up one ingredient or paragraph."""
+    joined = []
+    for raw in lines:
+        text = raw.strip()
+        if not text:
+            continue
+        if joined:
+            previous = joined[-1]
+            continues_word = text[:1].islower() or text[:1] in ",;()&"
+            in_ingredient = INGREDIENT_START.match(previous) and not NUMBERED_STEP.match(previous)
+            open_paragraph = (is_prose_line(previous) and not in_ingredient
+                              and not previous.endswith(SENTENCE_END + (":",)))
+            starts_new_item = NUMBERED_STEP.match(text) or META_START.match(text) or (
+                INGREDIENT_START.match(text) and not is_prose_line(text)
+            )
+            if (continues_word or open_paragraph) and not starts_new_item:
+                joined[-1] = previous.rstrip("-") + ("" if previous.endswith("-") else " ") + text
+                continue
+        joined.append(text)
+    return joined
+
+
+def split_sentences(text):
+    """Split a paragraph into sentences, skipping abbreviations and decimals."""
+    sentences, start = [], 0
+    for match in re.finditer(r"[.!?][\"”')]*\s+(?=[A-Z0-9“\"(])", text):
+        before = text[start:match.start()].split()
+        word = before[-1].lower().rstrip(".") if before else ""
+        if match.group()[0] == "." and (word in ABBREVIATIONS or len(word) == 1):
+            continue
+        sentences.append(text[start:match.end()].strip())
+        start = match.end()
+    sentences.append(text[start:].strip())
+    return [sentence for sentence in sentences if sentence]
+
+
+def split_steps(text):
+    """Turn a direction paragraph into steps of one or more whole sentences."""
+    if NUMBERED_STEP.match(text):
+        # Keep authored numbering; split "1. Mix. 2. Bake." run together on one line.
+        return [part.strip() for part in re.split(r"\s+(?=\d+[.)]\s)", text) if part.strip()]
+    steps = []
+    for sentence in split_sentences(text):
+        if steps and (len(sentence) < SHORT_SENTENCE or len(steps[-1]) < SHORT_SENTENCE):
+            steps[-1] += " " + sentence
+        else:
+            steps.append(sentence)
+    return steps
 
 
 def recipe_blocks(lines):
     blocks = []
-    for raw in lines:
-        text = raw.strip()
-        if not text or META_START.match(text):
-            continue
+    seen_ingredient = False
+    for text in join_wrapped_lines(lines):
         kind = classify_line(text)
-        # Rejoin wrapped instruction and ingredient lines instead of rendering
-        # each visual PDF line as an unrelated list item.
-        if kind in ("step", "ingredient", "note") and text[:1].islower() and blocks and blocks[-1]["type"] == kind:
-            blocks[-1]["text"] += " " + text
-        elif blocks and kind == "step" and blocks[-1]["type"] == "step" and not re.match(r"^\d+[.)]", text):
+        if kind == "ingredient":
+            seen_ingredient = True
+        if kind != "prose":
+            blocks.append({"type": kind, "text": text})
+        elif NOTE_START.match(text) or not seen_ingredient:
+            # Introductions before the ingredients, and marked notes, stay whole.
+            blocks.append({"type": "note", "text": text})
+        elif blocks and blocks[-1]["type"] == "step" and NUMBERED_STEP.match(blocks[-1]["text"]) and not NUMBERED_STEP.match(text):
+            # An unnumbered paragraph after "3. ..." finishes that numbered step.
             blocks[-1]["text"] += " " + text
         else:
-            blocks.append({"type": kind, "text": text})
+            blocks.extend({"type": "step", "text": step} for step in split_steps(text))
     return blocks
 
 

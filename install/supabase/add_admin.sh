@@ -7,10 +7,12 @@
 #   ./add_admin.sh [--local] --list
 source "$(dirname "$0")/lib.sh"
 # shellcheck disable=SC2046
+# Writes keep stdout on the terminal so the CLI can ask before changing a hosted project.
 query() { sb db query $(target_flag) "$1"; }
+read_query() { sb db query $(target_flag) --read-only "$1"; }
 
 if [[ "${1:-}" == "--list" ]]; then
-  query "select u.email, r.predicate, r.object, r.created_at
+  read_query "select u.email, r.predicate, r.object, r.created_at
     from public.roles r join auth.users u on u.id = r.actor
     order by u.email, r.object"
   exit 0
@@ -26,7 +28,7 @@ object="${2:-*}"
 if $remove; then
   query "delete from public.roles r using auth.users u
     where u.id = r.actor and lower(u.email) = '$email'
-      and r.object = '$object' and r.predicate = 'admin'" >/dev/null
+      and r.object = '$object' and r.predicate = 'admin'"
   log "Removed admin on '$object' from $email (the auth user still exists)"
   exit 0
 fi
@@ -48,5 +50,5 @@ esac
 
 query "insert into public.roles (actor, object, predicate)
   select id, '$object', 'admin' from auth.users where lower(email) = '$email'
-  on conflict (actor, object, predicate) do nothing" >/dev/null
+  on conflict (actor, object, predicate) do nothing"
 log "$email is admin on '$object'"

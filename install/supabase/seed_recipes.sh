@@ -14,5 +14,6 @@ json="${1:-$REPO_ROOT/data/recipes.json}"
 python3 "$SUPABASE_DIR/seed_recipes.py" "$json" "$SUPABASE_DIR/seed.sql" "$mode"
 log "Loading seed.sql into the $TARGET database"
 # shellcheck disable=SC2046
-sb db query $(target_flag) -f "$SUPABASE_DIR/seed.sql" >/dev/null
-sb db query $(target_flag) "select count(*) as recipes from public.recipes"
+# Output stays on the terminal so the CLI can ask before changing a hosted project.
+sb db query $(target_flag) -f "$SUPABASE_DIR/seed.sql"
+sb db query $(target_flag) --read-only "select count(*) as recipes from public.recipes"

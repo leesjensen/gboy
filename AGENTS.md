@@ -24,7 +24,7 @@ Keep Vite's relative `base: './'` and hash navigation for eventual GitHub Pages 
 
 ## Recipe Data and Review
 
-Recipes are normally edited in the app. To re-extract, run `swift scripts/extract_pdf_lines.swift gboy.pdf /tmp/gboy-lines.json` followed by `python3 scripts/build_recipe_data.py /tmp/gboy-lines.json`, then `install/supabase/seed_recipes.sh` (new IDs only; `--force` overwrites database edits). The PDF has multiple columns and recipes that cross pages, so extraction is heuristic. Review titles, category assignments, and ingredient/instruction boundaries after regeneration; page 10 has brief Belgian family notes that are represented as short entries. Preserve `sourcePage` and source text. Keep existing lowercase kebab-case IDs stable when editing titles, since links use those IDs.
+Recipes are normally edited in the app. To re-extract, run `swift scripts/extract_pdf_lines.swift gboy.pdf /tmp/gboy-lines.json` followed by `python3 scripts/build_recipe_data.py /tmp/gboy-lines.json`, then `install/supabase/seed_recipes.sh` (new IDs only; `--force` overwrites database edits). To re-tune how lines become blocks (`recipe_blocks()` in `scripts/build_recipe_data.py`) without re-extracting, run `python3 scripts/rebuild_blocks.py`; it rebuilds blocks from each recipe's `sourceText`. The PDF has multiple columns and recipes that cross pages, so extraction is heuristic. Review titles, category assignments, and ingredient/instruction boundaries after regeneration; page 10 has brief Belgian family notes that are represented as short entries. Preserve `sourcePage` and source text. Keep existing lowercase kebab-case IDs stable when editing titles, since links use those IDs.
 
 ## Style and Validation
 

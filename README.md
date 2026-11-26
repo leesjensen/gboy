@@ -34,6 +34,6 @@ Review the affected recipe titles and text after regeneration, especially entrie
 - `src/index.css` defines the Tailwind theme and global styles.
 - `data/recipes.json` is the extracted dataset used to seed the database. It is not shipped with the site.
 - `install/supabase/` holds the database schema, auth config, and setup scripts.
-- `scripts/` contains the macOS PDF text extractor and dataset builder.
+- `scripts/` contains the macOS PDF text extractor, the dataset builder, and `rebuild_blocks.py`, which re-splits each recipe's `sourceText` into ingredients, steps, and notes after the block rules change.
 
 Use clear, descriptive component names and keep visual styles consistent with the existing warm, editorial palette. Recipe content should remain data-driven rather than hard-coded into components.
