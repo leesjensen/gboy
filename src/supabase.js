@@ -89,3 +89,16 @@ export async function sendSignInLink(email) {
   })
   if (error) throw error
 }
+
+// Ranked full-text search (install/supabase/migrations/*_search_recipes.sql).
+export async function searchRecipes(query, limit = 50) {
+  const rows = check(await supabase.rpc('search_recipes', { p_query: query, p_limit: limit }))
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    category: row.category_id,
+    subcategory: row.subcategory,
+    sourcePage: row.source_page,
+    match: row.match,
+  }))
+}

@@ -2,11 +2,11 @@
 
 ## Purpose and Current State
 
-This is a recipe browser built from `gboy.pdf`, a 273-page family cookbook. It has a welcoming home page, 12 recipe categories, category filters, a detail page for each entry, and admin editing. Recipes (about 822) live in a hosted Supabase Postgres database that the browser queries directly; there is no app server. `data/recipes.json` is the original extraction used to seed it. Search is a future requirement; `recipes.search` is a weighted full-text column ready for it.
+This is a recipe browser built from `gboy.pdf`, a 273-page family cookbook. It has a welcoming home page, 12 recipe categories, category filters, a detail page for each entry, and admin editing. Recipes (about 822) live in a hosted Supabase Postgres database that the browser queries directly; there is no app server. `data/recipes.json` is the original extraction used to seed it. Search (`#/search/:query`, `src/Search.jsx`) calls the `search_recipes` database function, which ranks matches on the weighted `recipes.search` column (title, then subcategory, then recipe text).
 
 ## Architecture
 
-- `src/App.jsx` implements the pages, data loading, and lightweight hash routing (`#/category/:id`, `#/recipe/:id`, `#/recipe/:id/edit`, `#/new[/:category]`, `#/admin`).
+- `src/App.jsx` implements the pages, data loading, and lightweight hash routing (`#/category/:id`, `#/recipe/:id`, `#/recipe/:id/edit`, `#/new[/:category]`, `#/admin`, `#/search/:query`).
 - `src/Admin.jsx` has magic-link sign-in and the recipe editor; `src/supabase.js` has the client and all queries; `src/ui.jsx` has shared `Icon` and `Breadcrumbs`.
 - `src/main.jsx` mounts React; `src/index.css` contains the Tailwind theme and shared styles.
 - The app loads category and recipe summaries on start and each recipe's full text when it is opened. It needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (`.env.local` locally, repository variables in CI). Row-level security allows public reads and writes only for users with an `admin` grant in `public.roles`.

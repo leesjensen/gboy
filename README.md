@@ -1,6 +1,6 @@
 # GBoy Recipe Book
 
-A recipe browser built with Vite, React, and Tailwind CSS. Recipes live in a hosted [Supabase](https://supabase.com) Postgres database that the browser reads directly, so the site still deploys as static files. Anyone can browse; admins sign in with an emailed link to add, edit, and delete recipes. Hash-based navigation keeps pages compatible with GitHub Pages hosting.
+A recipe browser built with Vite, React, and Tailwind CSS. Recipes live in a hosted [Supabase](https://supabase.com) Postgres database that the browser reads directly, so the site still deploys as static files. Anyone can browse and search titles, ingredients, and directions; admins sign in with an emailed link to add, edit, and delete recipes. Hash-based navigation keeps pages compatible with GitHub Pages hosting.
 
 ## Run locally
 
@@ -16,7 +16,7 @@ See `install/supabase/README.md` to create the database and add admins. Vite pri
 
 Admins edit recipes in the app: open **Admin** in the footer, sign in with the emailed link, then use **Add recipe** or a recipe's **Edit** button. Recipe IDs never change after creation, so links keep working.
 
-The original extraction is in `data/recipes.json`, which seeds the database (`install/supabase/seed_recipes.sh`). Edits made in the app live only in the database. Records include a stable ID, category and subcategory, source page, formatted recipe blocks, and the source transcription. The PDF is the source of truth. The text is ready to index when search is added. To rebuild the extracted collection on macOS:
+The original extraction is in `data/recipes.json`, which seeds the database (`install/supabase/seed_recipes.sh`). Edits made in the app live only in the database. Records include a stable ID, category and subcategory, source page, formatted recipe blocks, and the source transcription. The PDF is the source of truth. To rebuild the extracted collection on macOS:
 
 ```sh
 swift scripts/extract_pdf_lines.swift gboy.pdf /tmp/gboy-lines.json
@@ -29,6 +29,7 @@ Review the affected recipe titles and text after regeneration, especially entrie
 
 - `src/App.jsx` contains the home page, category browser, recipe detail view, data loading, and hash routing.
 - `src/Admin.jsx` contains admin sign-in and the recipe editor.
+- `src/Search.jsx` contains the search page.
 - `src/supabase.js` creates the Supabase client and holds every query.
 - `src/ui.jsx` has shared icons and breadcrumbs.
 - `src/index.css` defines the Tailwind theme and global styles.

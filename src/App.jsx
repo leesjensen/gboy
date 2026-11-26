@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RecipeEditor, SignInPage } from './Admin.jsx'
+import { SearchPage, searchHref } from './Search.jsx'
 import { canEditRecipes, fetchCategories, fetchRecipe, fetchRecipeSummaries, isConfigured, supabase } from './supabase.js'
 import { Breadcrumbs, Icon } from './ui.jsx'
 
@@ -51,6 +52,13 @@ function parseRoute() {
   if (segments[0] === 'recipe' && segments[1]) return { page: 'recipe', id: segments[1] }
   if (segments[0] === 'new') return { page: 'new', category: segments[1] }
   if (segments[0] === 'admin') return { page: 'admin' }
+  if (segments[0] === 'search') {
+    try {
+      return { page: 'search', query: decodeURIComponent(segments.slice(1).join('/')) }
+    } catch {
+      return { page: 'search', query: '' }
+    }
+  }
   return { page: 'home' }
 }
 
@@ -68,13 +76,30 @@ function Brand({ onClick }) {
   )
 }
 
-function Header({ canEdit }) {
+function HeaderSearch() {
+  const [query, setQuery] = useState('')
+  function submit(event) {
+    event.preventDefault()
+    window.location.hash = searchHref(query)
+    setQuery('')
+  }
+  return (
+    <form role="search" onSubmit={submit} className="relative hidden md:block">
+      <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-forest/40" />
+      <input type="search" aria-label="Search recipes" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search recipes" className="w-44 rounded-full border border-forest/10 bg-white/80 py-2 pl-9 pr-3 text-sm text-forest outline-none transition placeholder:text-forest/40 focus:w-60 focus:border-forest/30 focus:bg-white lg:w-52" />
+    </form>
+  )
+}
+
+function Header({ canEdit, page }) {
   return (
     <header className="sticky top-0 z-30 border-b border-forest/8 bg-cream/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5 sm:px-8 lg:px-12">
         <Brand />
         <nav className="flex items-center gap-3 sm:gap-7" aria-label="Main navigation">
           <a href="#/" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">Home</a>
+          {page !== 'search' && <HeaderSearch />}
+          <a href="#/search" aria-label="Search recipes" className="grid size-9 place-items-center rounded-full text-forest/70 transition hover:bg-white hover:text-forest md:hidden"><Icon name="search" className="size-5" /></a>
           <a href="#/category/all" className="text-sm font-medium text-forest/70 transition hover:text-forest">Browse recipes</a>
           {canEdit && (
             <a href="#/new" className="inline-flex items-center gap-1.5 rounded-full bg-forest px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-light">
@@ -82,7 +107,7 @@ function Header({ canEdit }) {
             </a>
           )}
           {canEdit && <a href="#/admin" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">Admin</a>}
-          <a href="#/category/desserts" className={`${canEdit ? 'lg:inline-flex' : 'sm:inline-flex'} hidden rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm ring-1 ring-forest/10 transition hover:bg-sage-pale`}>
+          <a href="#/category/desserts" className={`${canEdit ? 'xl:inline-flex' : 'lg:inline-flex'} hidden rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm ring-1 ring-forest/10 transition hover:bg-sage-pale`}>
             Something sweet <Icon name="arrow" className="ml-2 size-4" />
           </a>
         </nav>
@@ -545,6 +570,7 @@ export default function App() {
   else if (loadError) content = <StatusMessage title="The recipe box is taking a moment." message="Refresh the page to load the collection." />
   else if (route.page === 'admin') content = <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />
   else if (!recipes) content = <StatusMessage title="Opening the recipe box…" loading />
+  else if (route.page === 'search') content = <SearchPage key={route.query} initialQuery={route.query} categoriesMap={categoriesMap} />
   else if (route.page === 'home') content = <HomePage recipes={recipes} allCategories={allCategories} />
   else if (route.page === 'category') content = <CategoryPage categoryId={route.id} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} />
   else if ((route.page === 'new' || route.page === 'edit') && !canEdit) {
@@ -559,5 +585,5 @@ export default function App() {
   else if (route.page === 'edit') content = <RecipeEditor key={`${detail.recipe.id}-${recipeVersion}`} recipe={detail.recipe} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />
   else content = <RecipePage recipe={detail.recipe} categoriesMap={categoriesMap} canEdit={canEdit} />
 
-  return <div className="min-h-screen bg-cream text-forest"><Header canEdit={canEdit} />{content}<Footer /></div>
+  return <div className="min-h-screen bg-cream text-forest"><Header canEdit={canEdit} page={route.page} />{content}<Footer /></div>
 }
