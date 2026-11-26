@@ -1,94 +1,118 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RecipeEditor, SignInPage } from './Admin.jsx'
-import { SearchPage, searchHref } from './Search.jsx'
-import { canEditRecipes, fetchCategories, fetchRecipe, fetchRecipeSummaries, isConfigured, supabase } from './supabase.js'
-import { Breadcrumbs, Icon } from './ui.jsx'
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { RecipeEditor, SignInPage } from './Admin.jsx';
+import { SearchPage, searchHref } from './Search.jsx';
+import { canEditRecipes, fetchCategories, fetchRecipe, fetchRecipeSummaries, isConfigured, supabase } from './supabase.js';
+import { Breadcrumbs, Icon } from './ui.jsx';
 
 const categoryDetails = {
   appetizers: {
-    icon: '✳', tint: 'coral', description: 'A little something to start the table and get everyone gathered around.',
+    icon: '✳',
+    tint: 'coral',
+    description: 'A little something to start the table and get everyone gathered around.',
   },
   backpacking: {
-    icon: '⌁', tint: 'gold', description: 'Trail-friendly favorites and camp cooking ideas from the collection.',
+    icon: '⌁',
+    tint: 'gold',
+    description: 'Trail-friendly favorites and camp cooking ideas from the collection.',
   },
   belgian: {
-    icon: '✦', tint: 'blue', description: 'A small collection of Belgian family recipes, from waffles to waterzooi.',
+    icon: '✦',
+    tint: 'blue',
+    description: 'A small collection of Belgian family recipes, from waffles to waterzooi.',
   },
   breads: {
-    icon: '⌂', tint: 'gold', description: 'Warm loaves, quick breads, rolls, muffins, and doughs worth sharing.',
+    icon: '⌂',
+    tint: 'gold',
+    description: 'Warm loaves, quick breads, rolls, muffins, and doughs worth sharing.',
   },
   breakfast: {
-    icon: '☀', tint: 'sage', description: 'Pancakes, oatmeal, brunch bakes, and easy starts to the day.',
+    icon: '☀',
+    tint: 'sage',
+    description: 'Pancakes, oatmeal, brunch bakes, and easy starts to the day.',
   },
   desserts: {
-    icon: '♡', tint: 'rose', description: 'Cookies, cakes, pies, frozen treats, and a little something sweet.',
+    icon: '♡',
+    tint: 'rose',
+    description: 'Cookies, cakes, pies, frozen treats, and a little something sweet.',
   },
   drinks: {
-    icon: '◌', tint: 'blue', description: 'Smoothies, coolers, punches, and cozy cups for every season.',
+    icon: '◌',
+    tint: 'blue',
+    description: 'Smoothies, coolers, punches, and cozy cups for every season.',
   },
   entrees: {
-    icon: '✳', tint: 'sage', description: 'Comforting mains, weeknight dinners, sandwiches, and wraps.',
+    icon: '✳',
+    tint: 'sage',
+    description: 'Comforting mains, weeknight dinners, sandwiches, and wraps.',
   },
   salads: {
-    icon: '❋', tint: 'sage', description: 'Fresh greens, pasta salads, and colorful bowls for the middle of the table.',
+    icon: '❋',
+    tint: 'sage',
+    description: 'Fresh greens, pasta salads, and colorful bowls for the middle of the table.',
   },
   sauces: {
-    icon: '◉', tint: 'coral', description: 'The dips, dressings, sauces, syrups, and spreads that make a meal sing.',
+    icon: '◉',
+    tint: 'coral',
+    description: 'The dips, dressings, sauces, syrups, and spreads that make a meal sing.',
   },
   sides: {
-    icon: '✿', tint: 'gold', description: 'Vegetables, potatoes, grains, and all the good things alongside.',
+    icon: '✿',
+    tint: 'gold',
+    description: 'Vegetables, potatoes, grains, and all the good things alongside.',
   },
   soups: {
-    icon: '◒', tint: 'blue', description: 'A comforting pot for a chilly evening, a busy day, or a full table.',
+    icon: '◒',
+    tint: 'blue',
+    description: 'A comforting pot for a chilly evening, a busy day, or a full table.',
   },
-}
+};
 
-const defaultCategoryDetails = { icon: '✦', tint: 'sage', description: '' }
+const defaultCategoryDetails = { icon: '✦', tint: 'sage', description: '' };
 
 function parseRoute() {
-  const segments = window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean)
-  if (segments[0] === 'category' && segments[1]) return { page: 'category', id: segments[1] }
-  if (segments[0] === 'recipe' && segments[1] && segments[2] === 'edit') return { page: 'edit', id: segments[1] }
-  if (segments[0] === 'recipe' && segments[1]) return { page: 'recipe', id: segments[1] }
-  if (segments[0] === 'new') return { page: 'new', category: segments[1] }
-  if (segments[0] === 'admin') return { page: 'admin' }
+  const segments = window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+  if (segments[0] === 'category' && segments[1]) return { page: 'category', id: segments[1] };
+  if (segments[0] === 'recipe' && segments[1] && segments[2] === 'edit') return { page: 'edit', id: segments[1] };
+  if (segments[0] === 'recipe' && segments[1]) return { page: 'recipe', id: segments[1] };
+  if (segments[0] === 'new') return { page: 'new', category: segments[1] };
+  if (segments[0] === 'admin') return { page: 'admin' };
   if (segments[0] === 'search') {
     try {
-      return { page: 'search', query: decodeURIComponent(segments.slice(1).join('/')) }
+      return { page: 'search', query: decodeURIComponent(segments.slice(1).join('/')) };
     } catch {
-      return { page: 'search', query: '' }
+      return { page: 'search', query: '' };
     }
   }
-  return { page: 'home' }
+  return { page: 'home' };
 }
 
 function Brand({ onClick }) {
   return (
-    <a href="#/" onClick={onClick} className="flex items-center gap-3 text-forest" aria-label="GBoy Recipe Book home">
+    <a href="#/" onClick={onClick} className="flex items-center gap-3 text-forest" aria-label="GBoy, the Giant Book of Yum: home">
       <span className="grid size-10 place-items-center rounded-2xl bg-forest text-cream shadow-sm">
         <Icon name="leaf" className="size-5" />
       </span>
       <span className="leading-tight">
         <span className="block font-serif text-[1.05rem] font-semibold tracking-tight">GBoy</span>
-        <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.19em] text-forest/60">Recipe book</span>
+        <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.19em] text-forest/60">Giant Book of Yum</span>
       </span>
     </a>
-  )
+  );
 }
 
 function HeaderSearch() {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState('');
   function submit(event) {
-    event.preventDefault()
-    window.location.hash = searchHref(query)
-    setQuery('')
+    event.preventDefault();
+    window.location.hash = searchHref(query);
+    setQuery('');
   }
   return (
     <form role="search" onSubmit={submit} className="relative hidden md:block">
       <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-forest/40" />
       <input type="search" aria-label="Search recipes" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search recipes" className="w-44 rounded-full border border-forest/10 bg-white/80 py-2 pl-9 pr-3 text-sm text-forest outline-none transition placeholder:text-forest/40 focus:w-60 focus:border-forest/30 focus:bg-white lg:w-52" />
     </form>
-  )
+  );
 }
 
 function Header({ canEdit, page }) {
@@ -97,23 +121,33 @@ function Header({ canEdit, page }) {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5 sm:px-8 lg:px-12">
         <Brand />
         <nav className="flex items-center gap-3 sm:gap-7" aria-label="Main navigation">
-          <a href="#/" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">Home</a>
+          <a href="#/" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">
+            Home
+          </a>
           {page !== 'search' && <HeaderSearch />}
-          <a href="#/search" aria-label="Search recipes" className="grid size-9 place-items-center rounded-full text-forest/70 transition hover:bg-white hover:text-forest md:hidden"><Icon name="search" className="size-5" /></a>
-          <a href="#/category/all" className="text-sm font-medium text-forest/70 transition hover:text-forest">Browse recipes</a>
+          <a href="#/search" aria-label="Search recipes" className="grid size-9 place-items-center rounded-full text-forest/70 transition hover:bg-white hover:text-forest md:hidden">
+            <Icon name="search" className="size-5" />
+          </a>
+          <a href="#/category/all" className="text-sm font-medium text-forest/70 transition hover:text-forest">
+            Browse recipes
+          </a>
           {canEdit && (
             <a href="#/new" className="inline-flex items-center gap-1.5 rounded-full bg-forest px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-light">
               <Icon name="plus" className="size-4" /> <span className="hidden sm:inline">Add recipe</span>
             </a>
           )}
-          {canEdit && <a href="#/admin" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">Admin</a>}
+          {canEdit && (
+            <a href="#/admin" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">
+              Admin
+            </a>
+          )}
           <a href="#/category/desserts" className={`${canEdit ? 'xl:inline-flex' : 'lg:inline-flex'} hidden rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm ring-1 ring-forest/10 transition hover:bg-sage-pale`}>
             Something sweet <Icon name="arrow" className="ml-2 size-4" />
           </a>
         </nav>
       </div>
     </header>
-  )
+  );
 }
 
 function HeroArt() {
@@ -130,14 +164,20 @@ function HeroArt() {
             <path d="M49 119c8-38 42-62 74-54 36-11 70 14 72 49 5 35-29 63-71 65-42 6-82-19-75-60Z" fill="#e9b85c" />
             <path d="M63 115c14-30 43-46 70-37 30-10 53 11 61 34-7 31-36 48-69 47-29 3-51-14-62-44Z" fill="#f7d981" />
             <path d="M81 101c17 10 37 16 58 10m-64 17c18 12 48 20 75 14m-65 13c19 10 43 12 61 7m-22-65c-9 14-14 25-15 38m45-31c-8 15-12 29-11 45" fill="none" stroke="#d69437" strokeWidth="5" strokeLinecap="round" />
-            <circle cx="101" cy="99" r="10" fill="#c84f35" /><circle cx="151" cy="124" r="11" fill="#c84f35" /><circle cx="121" cy="150" r="9" fill="#c84f35" />
+            <circle cx="101" cy="99" r="10" fill="#c84f35" />
+            <circle cx="151" cy="124" r="11" fill="#c84f35" />
+            <circle cx="121" cy="150" r="9" fill="#c84f35" />
             <path d="M78 125c9-11 21-11 30-1-8 13-20 16-30 1Zm65-33c9-12 22-12 30-2-7 14-19 18-30 2Zm4 55c9-12 21-13 31-3-7 15-20 19-31 3Z" fill="#49795a" />
             <path d="m108 83 8-15m7 18 8-13m11 49 10-13" stroke="#fff9e6" strokeWidth="3" strokeLinecap="round" />
           </svg>
         </div>
       </div>
       <div className="absolute bottom-[8%] left-[7%] rounded-2xl bg-white/95 px-4 py-3 shadow-lg shadow-forest/10 sm:px-5 sm:py-4">
-        <div className="mb-1 flex items-center gap-1 text-gold" aria-label="Family favorite"><span>✦</span><span>✦</span><span>✦</span></div>
+        <div className="mb-1 flex items-center gap-1 text-gold" aria-label="Family favorite">
+          <span>✦</span>
+          <span>✦</span>
+          <span>✦</span>
+        </div>
         <p className="font-serif text-base font-semibold text-forest sm:text-lg">Made for the middle of the table</p>
         <p className="mt-1 text-xs text-forest/55">Family favorites, gathered over time</p>
       </div>
@@ -145,14 +185,14 @@ function HeroArt() {
         <Icon name="spark" className="size-6" />
       </div>
     </div>
-  )
+  );
 }
 
 function categoryRecipes(categories, recipes) {
   return categories.map((category) => {
-    const matching = recipes.filter((recipe) => recipe.category === category.id)
-    return { ...defaultCategoryDetails, ...categoryDetails[category.id], ...category, count: matching.length, recipes: matching }
-  })
+    const matching = recipes.filter((recipe) => recipe.category === category.id);
+    return { ...defaultCategoryDetails, ...categoryDetails[category.id], ...category, count: matching.length, recipes: matching };
+  });
 }
 
 function SectionHeading({ eyebrow, title, description, action }) {
@@ -165,7 +205,7 @@ function SectionHeading({ eyebrow, title, description, action }) {
       </div>
       {action}
     </div>
-  )
+  );
 }
 
 function CategoryCard({ category }) {
@@ -174,21 +214,25 @@ function CategoryCard({ category }) {
       <div className="absolute -right-6 -top-10 size-36 rounded-full border border-current/10 opacity-70 transition duration-500 group-hover:scale-110" />
       <div className="flex items-start justify-between">
         <span className="grid size-11 place-items-center rounded-2xl bg-white/70 font-serif text-2xl text-forest shadow-sm">{category.icon}</span>
-        <span className="rounded-full bg-white/60 px-3 py-1 text-xs font-semibold text-forest/65">{category.count} {category.count === 1 ? 'recipe' : 'recipes'}</span>
+        <span className="rounded-full bg-white/60 px-3 py-1 text-xs font-semibold text-forest/65">
+          {category.count} {category.count === 1 ? 'recipe' : 'recipes'}
+        </span>
       </div>
       <div className="relative z-10 mt-7 flex items-end justify-between gap-3">
         <div>
           <h3 className="font-serif text-xl font-semibold text-forest sm:text-2xl">{category.name}</h3>
           <p className="mt-1 max-w-[14rem] text-xs leading-5 text-forest/65">{category.description}</p>
         </div>
-        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-forest text-white transition group-hover:translate-x-1"><Icon name="arrow" className="size-4" /></span>
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-forest text-white transition group-hover:translate-x-1">
+          <Icon name="arrow" className="size-4" />
+        </span>
       </div>
     </a>
-  )
+  );
 }
 
 function RecipeArt({ category, compact = false }) {
-  const tint = categoryDetails[category]?.tint || 'sage'
+  const tint = categoryDetails[category]?.tint || 'sage';
   return (
     <div className={`recipe-art tint-${tint} relative grid ${compact ? 'h-28' : 'h-36'} place-items-center overflow-hidden rounded-[1.2rem]`}>
       <div className="absolute -right-5 -top-9 size-24 rounded-full border border-forest/10" />
@@ -200,11 +244,11 @@ function RecipeArt({ category, compact = false }) {
       </div>
       <span className="absolute bottom-3 right-3 rounded-full bg-white/70 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-forest/55">From the book</span>
     </div>
-  )
+  );
 }
 
 function RecipeCard({ recipe }) {
-  const category = { name: recipe.categoryName }
+  const category = { name: recipe.categoryName };
   return (
     <a href={`#/recipe/${recipe.id}`} className="group flex h-full flex-col rounded-[1.55rem] border border-forest/8 bg-white p-3.5 shadow-sm shadow-forest/[0.025] transition duration-300 hover:-translate-y-1 hover:border-forest/15 hover:shadow-xl hover:shadow-forest/10 sm:p-4">
       <RecipeArt category={recipe.category} compact />
@@ -215,38 +259,42 @@ function RecipeCard({ recipe }) {
         </div>
         <h3 className="font-serif text-[1.16rem] font-semibold leading-snug text-forest transition group-hover:text-coral">{recipe.title}</h3>
         <div className="mt-auto flex items-center justify-between pt-4 text-xs text-forest/50">
-          <span className="flex items-center gap-1.5"><Icon name="book" className="size-3.5" /> In the collection</span>
-          <span className="grid size-8 place-items-center rounded-full bg-cream text-forest transition group-hover:bg-forest group-hover:text-white"><Icon name="arrow" className="size-3.5" /></span>
+          <span className="flex items-center gap-1.5">
+            <Icon name="book" className="size-3.5" /> In the collection
+          </span>
+          <span className="grid size-8 place-items-center rounded-full bg-cream text-forest transition group-hover:bg-forest group-hover:text-white">
+            <Icon name="arrow" className="size-3.5" />
+          </span>
         </div>
       </div>
     </a>
-  )
+  );
 }
 
 function HomePage({ recipes, allCategories }) {
   const featured = useMemo(() => {
-    const ids = ['warm-pizza-dip-from-good-housekeeping-jan-feb-2021-p-107', 'chicken-alfredo', 'easy-pumpkin-loaf', 'black-bean-soup']
-    return ids.map((id) => recipes.find((recipe) => recipe.id === id)).filter(Boolean)
-  }, [recipes])
+    const ids = ['warm-pizza-dip-from-good-housekeeping-jan-feb-2021-p-107', 'chicken-alfredo', 'easy-pumpkin-loaf', 'black-bean-soup'];
+    return ids.map((id) => recipes.find((recipe) => recipe.id === id)).filter(Boolean);
+  }, [recipes]);
 
   return (
     <main>
       <section className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 pt-9 sm:px-8 sm:pb-20 sm:pt-14 lg:grid-cols-[1.02fr_.98fr] lg:gap-14 lg:px-12 lg:pb-24">
         <div className="relative z-10 max-w-2xl">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-forest/10 bg-white/70 px-3.5 py-2 text-xs font-semibold text-forest/65 shadow-sm">
-            <Icon name="spark" className="size-4 text-coral" /> Recipes collected with love
+            <Icon name="spark" className="size-4 text-coral" /> Compiled by Lisa Jensen, with love
           </div>
           <h1 className="font-serif text-[3.15rem] font-medium leading-[1.02] tracking-[-0.045em] text-forest sm:text-6xl lg:text-[4.45rem]">
             Good food brings <span className="italic text-coral">us</span> together.
           </h1>
-          <p className="mt-6 max-w-xl text-base leading-7 text-forest/65 sm:text-lg sm:leading-8">
-            A welcoming home for the GBoy recipe collection. Find an old favorite, choose something new, and make room for one more at the table.
-          </p>
+          <p className="mt-6 max-w-xl text-base leading-7 text-forest/65 sm:text-lg sm:leading-8">Recipes collected by Lisa Jensen from many sources over the years to share with her children, with love. Find an old favorite, choose something new, and make room for one more at the table.</p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <a href="#/category/all" className="inline-flex items-center justify-center gap-3 rounded-full bg-forest px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-forest/15 transition hover:bg-forest-light">
               Browse all recipes <Icon name="arrow" className="size-4" />
             </a>
-            <a href="#categories" className="rounded-full px-5 py-3.5 text-sm font-semibold text-forest/70 transition hover:bg-white">Explore categories</a>
+            <a href="#categories" className="rounded-full px-5 py-3.5 text-sm font-semibold text-forest/70 transition hover:bg-white">
+              Explore categories
+            </a>
           </div>
           <div className="mt-10 flex items-center gap-4 border-t border-forest/10 pt-6 sm:mt-12">
             <div className="flex -space-x-2" aria-hidden="true">
@@ -254,7 +302,9 @@ function HomePage({ recipes, allCategories }) {
               <span className="grid size-9 place-items-center rounded-full border-2 border-cream bg-gold-pale text-sm">✿</span>
               <span className="grid size-9 place-items-center rounded-full border-2 border-cream bg-sage-pale text-sm">✦</span>
             </div>
-            <p className="text-sm text-forest/55"><strong className="font-semibold text-forest">{recipes.length} recipes</strong> across {allCategories.filter((category) => category.count).length} cozy corners</p>
+            <p className="text-sm text-forest/55">
+              <strong className="font-semibold text-forest">{recipes.length} recipes</strong> across {allCategories.filter((category) => category.count).length} cozy corners
+            </p>
           </div>
         </div>
         <HeroArt />
@@ -264,7 +314,11 @@ function HomePage({ recipes, allCategories }) {
         <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-12">
           <SectionHeading eyebrow="Find your kind of good" title="What sounds good today?" description="Browse by craving, course, or the kind of day you're having." />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {allCategories.filter((category) => category.count).map((category) => <CategoryCard key={category.id} category={category} />)}
+            {allCategories
+              .filter((category) => category.count)
+              .map((category) => (
+                <CategoryCard key={category.id} category={category} />
+              ))}
           </div>
         </div>
       </section>
@@ -274,10 +328,16 @@ function HomePage({ recipes, allCategories }) {
           eyebrow="A few from the recipe box"
           title="Good places to start"
           description="A handful of favorites from across the collection."
-          action={<a href="#/category/all" className="inline-flex items-center gap-2 text-sm font-semibold text-forest transition hover:text-coral">See every recipe <Icon name="arrow" className="size-4" /></a>}
+          action={
+            <a href="#/category/all" className="inline-flex items-center gap-2 text-sm font-semibold text-forest transition hover:text-coral">
+              See every recipe <Icon name="arrow" className="size-4" />
+            </a>
+          }
         />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {featured.map((recipe) => <RecipeCard key={recipe.id} recipe={recipe} />)}
+          {featured.map((recipe) => (
+            <RecipeCard key={recipe.id} recipe={recipe} />
+          ))}
         </div>
       </section>
 
@@ -287,34 +347,37 @@ function HomePage({ recipes, allCategories }) {
           <div className="absolute -right-2 -top-10 size-44 rounded-full border border-white/10" />
           <div className="relative flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
             <div>
-              <p className="mb-2 text-[0.66rem] font-bold uppercase tracking-[0.2em] text-gold">A cookbook with history</p>
+              <p className="mb-2 text-[0.66rem] font-bold uppercase tracking-[0.2em] text-gold">From Lisa, with love</p>
               <h2 className="max-w-xl font-serif text-3xl leading-tight sm:text-4xl">Every recipe has a place in the story.</h2>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-white/65">The original collection is still here, alongside a calmer way to browse it one recipe at a time.</p>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-white/65">Lisa gathered these recipes from many sources and compiled them into the Giant Book of Yum for her children. Every recipe keeps its page number from the original book, along with the text as it was first written.</p>
             </div>
-            <span className="inline-flex w-fit shrink-0 items-center gap-3 rounded-full bg-white/10 px-5 py-3 text-sm font-semibold text-white/85 ring-1 ring-white/15"><Icon name="book" className="size-4" /> 273 pages, gathered over time</span>
+            <span className="inline-flex w-fit shrink-0 items-center gap-3 rounded-full bg-white/10 px-5 py-3 text-sm font-semibold text-white/85 ring-1 ring-white/15">
+              <Icon name="book" className="size-4" /> 273 pages, gathered over time
+            </span>
           </div>
         </div>
       </section>
     </main>
-  )
+  );
 }
 
 function CategoryPage({ categoryId, recipes, categoriesMap, canEdit }) {
-  const category = categoriesMap[categoryId]
-  const [selectedSubcategory, setSelectedSubcategory] = useState('All')
-  useEffect(() => setSelectedSubcategory('All'), [categoryId])
+  const category = categoriesMap[categoryId];
+  const [selectedSubcategory, setSelectedSubcategory] = useState('All');
+  useEffect(() => setSelectedSubcategory('All'), [categoryId]);
 
-  const source = categoryId === 'all' ? recipes : category?.recipes || []
-  const subcategories = [...new Set(source.map((recipe) => recipe.subcategory).filter(Boolean))]
-  const visible = source.filter((recipe) => selectedSubcategory === 'All' || recipe.subcategory === selectedSubcategory)
-    .sort((a, b) => a.title.localeCompare(b.title))
+  const source = categoryId === 'all' ? recipes : category?.recipes || [];
+  const subcategories = [...new Set(source.map((recipe) => recipe.subcategory).filter(Boolean))];
+  const visible = source.filter((recipe) => selectedSubcategory === 'All' || recipe.subcategory === selectedSubcategory).sort((a, b) => a.title.localeCompare(b.title));
 
-  const title = categoryId === 'all' ? 'All recipes' : category?.name || 'Recipe collection'
-  const description = categoryId === 'all' ? 'Every recipe in one place. Pick a category or settle in and browse.' : category?.description
+  const title = categoryId === 'all' ? 'All recipes' : category?.name || 'Recipe collection';
+  const description = categoryId === 'all' ? 'Every recipe in one place. Pick a category or settle in and browse.' : category?.description;
 
   return (
     <main className="mx-auto min-h-[70vh] max-w-7xl px-5 pb-20 pt-8 sm:px-8 sm:pt-12 lg:px-12">
-      <Breadcrumbs><span className="text-forest">{title}</span></Breadcrumbs>
+      <Breadcrumbs>
+        <span className="text-forest">{title}</span>
+      </Breadcrumbs>
       <div className="mb-9 flex flex-col gap-6 border-b border-forest/10 pb-8 sm:flex-row sm:items-end sm:justify-between sm:pb-10">
         <div className="max-w-2xl">
           <p className="mb-2 text-[0.68rem] font-bold uppercase tracking-[0.21em] text-coral">The recipe collection</p>
@@ -328,8 +391,13 @@ function CategoryPage({ categoryId, recipes, categoriesMap, canEdit }) {
             </a>
           )}
           <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-forest/8">
-            <span className="grid size-10 place-items-center rounded-xl bg-sage-pale text-forest"><Icon name="book" className="size-5" /></span>
-            <div><p className="font-serif text-xl font-semibold text-forest">{visible.length}</p><p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-forest/45">recipes to browse</p></div>
+            <span className="grid size-10 place-items-center rounded-xl bg-sage-pale text-forest">
+              <Icon name="book" className="size-5" />
+            </span>
+            <div>
+              <p className="font-serif text-xl font-semibold text-forest">{visible.length}</p>
+              <p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-forest/45">recipes to browse</p>
+            </div>
           </div>
         </div>
       </div>
@@ -342,29 +410,46 @@ function CategoryPage({ categoryId, recipes, categoriesMap, canEdit }) {
           ))}
         </div>
       )}
-      {visible.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{visible.map((recipe) => <RecipeCard key={recipe.id} recipe={recipe} />)}</div> : <p className="rounded-3xl bg-white p-8 text-center text-forest/60">No recipes in this collection yet.</p>}
+      {visible.length ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {visible.map((recipe) => (
+            <RecipeCard key={recipe.id} recipe={recipe} />
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-3xl bg-white p-8 text-center text-forest/60">No recipes in this collection yet.</p>
+      )}
     </main>
-  )
+  );
 }
 
 function metaLabel(text) {
-  return text.replace(/\s+/g, ' ').replace(/\s*-\s*/g, ' · ').replace(/\s+--\s+/g, ' · ')
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/\s*-\s*/g, ' · ')
+    .replace(/\s+--\s+/g, ' · ');
 }
 
 function RecipePage({ recipe, categoriesMap, canEdit }) {
-  const category = categoriesMap[recipe.category]
-  const categoryName = category?.name || recipe.category
-  const meta = recipe.blocks.filter((block) => block.type === 'meta')
-  const bodyBlocks = recipe.blocks.filter((block) => block.type !== 'meta')
-  const ingredients = bodyBlocks.filter((block) => block.type === 'ingredient')
-  const steps = bodyBlocks.filter((block) => block.type === 'step')
-  const labels = bodyBlocks.filter((block) => block.type === 'label')
-  const notes = bodyBlocks.filter((block) => block.type === 'note')
-  const hasStructuredParts = ingredients.length > 0 || steps.length > 0
+  const category = categoriesMap[recipe.category];
+  const categoryName = category?.name || recipe.category;
+  const meta = recipe.blocks.filter((block) => block.type === 'meta');
+  const bodyBlocks = recipe.blocks.filter((block) => block.type !== 'meta');
+  const ingredients = bodyBlocks.filter((block) => block.type === 'ingredient');
+  const steps = bodyBlocks.filter((block) => block.type === 'step');
+  const labels = bodyBlocks.filter((block) => block.type === 'label');
+  const notes = bodyBlocks.filter((block) => block.type === 'note');
+  const hasStructuredParts = ingredients.length > 0 || steps.length > 0;
 
   return (
     <main className="mx-auto min-h-[70vh] max-w-7xl px-5 pb-20 pt-8 sm:px-8 sm:pt-12 lg:px-12">
-      <Breadcrumbs><a href={`#/category/${recipe.category}`} className="transition hover:text-forest">{categoryName}</a><span>/</span><span className="max-w-[15rem] truncate text-forest">{recipe.title}</span></Breadcrumbs>
+      <Breadcrumbs>
+        <a href={`#/category/${recipe.category}`} className="transition hover:text-forest">
+          {categoryName}
+        </a>
+        <span>/</span>
+        <span className="max-w-[15rem] truncate text-forest">{recipe.title}</span>
+      </Breadcrumbs>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-12">
         <article>
           <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -373,12 +458,30 @@ function RecipePage({ recipe, categoriesMap, canEdit }) {
                 <Icon name="edit" className="size-3.5" /> Edit
               </a>
             )}
-            <a href={`#/category/${recipe.category}`} className={`category-pill tint-${category?.tint || 'sage'} rounded-full px-3.5 py-1.5 text-[0.67rem] font-bold uppercase tracking-[0.15em]`}>{categoryName}</a>
+            <a href={`#/category/${recipe.category}`} className={`category-pill tint-${category?.tint || 'sage'} rounded-full px-3.5 py-1.5 text-[0.67rem] font-bold uppercase tracking-[0.15em]`}>
+              {categoryName}
+            </a>
             {recipe.subcategory && <span className="rounded-full bg-white px-3.5 py-1.5 text-[0.67rem] font-semibold text-forest/55 ring-1 ring-forest/8">{recipe.subcategory}</span>}
           </div>
           <h1 className="max-w-4xl font-serif text-4xl font-semibold leading-[1.08] tracking-tight text-forest sm:text-5xl lg:text-[3.55rem]">{recipe.title}</h1>
-          <p className="mt-4 flex items-center gap-2 text-sm text-forest/50"><Icon name="book" className="size-4" /> GBoy recipe collection{recipe.sourcePage && <><span className="text-forest/25">·</span> page {recipe.sourcePage}</>}</p>
-          {meta.length > 0 && <div className="mt-6 flex flex-wrap gap-2">{meta.map((item, index) => <span key={index} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-forest/70 ring-1 ring-forest/8"><Icon name="clock" className="size-3.5 text-coral" />{metaLabel(item.text)}</span>)}</div>}
+          <p className="mt-4 flex items-center gap-2 text-sm text-forest/50">
+            <Icon name="book" className="size-4" /> Giant Book of Yum
+            {recipe.sourcePage && (
+              <>
+                <span className="text-forest/25">·</span> page {recipe.sourcePage}
+              </>
+            )}
+          </p>
+          {meta.length > 0 && (
+            <div className="mt-6 flex flex-wrap gap-2">
+              {meta.map((item, index) => (
+                <span key={index} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-forest/70 ring-1 ring-forest/8">
+                  <Icon name="clock" className="size-3.5 text-coral" />
+                  {metaLabel(item.text)}
+                </span>
+              ))}
+            </div>
+          )}
 
           <div className="my-8 overflow-hidden rounded-[1.8rem]">
             <RecipeArt category={recipe.category} />
@@ -392,18 +495,40 @@ function RecipePage({ recipe, categoriesMap, canEdit }) {
                   <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-forest/50">{ingredients.length} items</span>
                 </div>
                 <ul className="space-y-3.5">
-                  {ingredients.map((block, index) => <li key={index} className="flex gap-3 text-sm leading-6 text-forest/75"><span className="mt-[0.52rem] size-1.5 shrink-0 rounded-full bg-coral" />{block.text}</li>)}
+                  {ingredients.map((block, index) => (
+                    <li key={index} className="flex gap-3 text-sm leading-6 text-forest/75">
+                      <span className="mt-[0.52rem] size-1.5 shrink-0 rounded-full bg-coral" />
+                      {block.text}
+                    </li>
+                  ))}
                 </ul>
-                {labels.length > 0 && <div className="mt-6 space-y-2 border-t border-forest/10 pt-4">{labels.map((block, index) => <p key={index} className="font-semibold text-forest">{block.text}</p>)}</div>}
+                {labels.length > 0 && (
+                  <div className="mt-6 space-y-2 border-t border-forest/10 pt-4">
+                    {labels.map((block, index) => (
+                      <p key={index} className="font-semibold text-forest">
+                        {block.text}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </section>
               <section className="rounded-[1.65rem] bg-white p-5 shadow-sm ring-1 ring-forest/8 sm:p-6">
                 <h2 className="mb-5 font-serif text-2xl font-semibold text-forest">Let’s make it</h2>
                 <div className="space-y-4">
                   {steps.map((block, index) => {
-                    const numbered = block.text.match(/^(\d+)[.)]\s*(.*)$/)
-                    return <div key={index} className="flex gap-3.5 text-sm leading-6 text-forest/70"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-cream text-xs font-bold text-forest">{numbered?.[1] || index + 1}</span><p>{numbered?.[2] || block.text}</p></div>
+                    const numbered = block.text.match(/^(\d+)[.)]\s*(.*)$/);
+                    return (
+                      <div key={index} className="flex gap-3.5 text-sm leading-6 text-forest/70">
+                        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-cream text-xs font-bold text-forest">{numbered?.[1] || index + 1}</span>
+                        <p>{numbered?.[2] || block.text}</p>
+                      </div>
+                    );
                   })}
-                  {notes.map((block, index) => <p key={`note-${index}`} className="text-sm leading-6 text-forest/65">{block.text}</p>)}
+                  {notes.map((block, index) => (
+                    <p key={`note-${index}`} className="text-sm leading-6 text-forest/65">
+                      {block.text}
+                    </p>
+                  ))}
                 </div>
                 {!steps.length && <p className="text-sm leading-6 text-forest/60">The source has ingredient notes but no separate numbered directions for this recipe.</p>}
               </section>
@@ -411,14 +536,19 @@ function RecipePage({ recipe, categoriesMap, canEdit }) {
           ) : (
             <section className="rounded-[1.65rem] bg-white p-5 shadow-sm ring-1 ring-forest/8 sm:p-7">
               <h2 className="mb-4 font-serif text-2xl font-semibold text-forest">Recipe notes</h2>
-              <div className="space-y-3 text-sm leading-7 text-forest/70">{bodyBlocks.map((block, index) => <p key={index}>{block.text}</p>)}</div>
+              <div className="space-y-3 text-sm leading-7 text-forest/70">
+                {bodyBlocks.map((block, index) => (
+                  <p key={index}>{block.text}</p>
+                ))}
+              </div>
             </section>
           )}
 
           {recipe.sourceText && (
             <details className="group mt-6 rounded-2xl border border-forest/10 bg-white/55 p-4 sm:p-5">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-forest marker:hidden">
-                <span>See the source transcription</span><Icon name="chevron" className="size-4 transition group-open:rotate-180" />
+                <span>See the source transcription</span>
+                <Icon name="chevron" className="size-4 transition group-open:rotate-180" />
               </summary>
               <pre className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap border-t border-forest/10 pt-4 font-sans text-xs leading-6 text-forest/60">{recipe.sourceText}</pre>
             </details>
@@ -436,22 +566,37 @@ function RecipePage({ recipe, categoriesMap, canEdit }) {
             <p className="mb-4 text-[0.66rem] font-bold uppercase tracking-[0.18em] text-coral">Keep browsing</p>
             <h2 className="font-serif text-2xl font-semibold text-forest">More from {categoryName}</h2>
             <div className="mt-5 space-y-2">
-              {(category?.recipes || []).filter((item) => item.id !== recipe.id).slice(0, 4).map((item) => (
-                <a key={item.id} href={`#/recipe/${item.id}`} className="group flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition hover:bg-cream">
-                  <span className="line-clamp-2 font-serif text-[0.98rem] font-semibold leading-snug text-forest/80 group-hover:text-coral">{item.title}</span><Icon name="arrow" className="size-4 shrink-0 text-forest/40 transition group-hover:translate-x-1 group-hover:text-coral" />
-                </a>
-              ))}
+              {(category?.recipes || [])
+                .filter((item) => item.id !== recipe.id)
+                .slice(0, 4)
+                .map((item) => (
+                  <a key={item.id} href={`#/recipe/${item.id}`} className="group flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition hover:bg-cream">
+                    <span className="line-clamp-2 font-serif text-[0.98rem] font-semibold leading-snug text-forest/80 group-hover:text-coral">{item.title}</span>
+                    <Icon name="arrow" className="size-4 shrink-0 text-forest/40 transition group-hover:translate-x-1 group-hover:text-coral" />
+                  </a>
+                ))}
             </div>
-            <a href={`#/category/${recipe.category}`} className="mt-4 flex items-center justify-center gap-2 rounded-full bg-forest px-4 py-3 text-sm font-semibold text-white transition hover:bg-forest-light">View all in this category <Icon name="arrow" className="size-4" /></a>
+            <a href={`#/category/${recipe.category}`} className="mt-4 flex items-center justify-center gap-2 rounded-full bg-forest px-4 py-3 text-sm font-semibold text-white transition hover:bg-forest-light">
+              View all in this category <Icon name="arrow" className="size-4" />
+            </a>
           </div>
         </aside>
       </div>
     </main>
-  )
+  );
 }
 
 function NotFound() {
-  return <main className="mx-auto min-h-[65vh] max-w-2xl px-5 py-20 text-center"><span className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl bg-gold-pale text-2xl">✦</span><h1 className="font-serif text-4xl font-semibold text-forest">That recipe wandered off.</h1><p className="mt-3 text-forest/60">Try the recipe collection and pick another dish.</p><a href="#/category/all" className="mt-7 inline-flex items-center gap-2 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white">Browse recipes <Icon name="arrow" className="size-4" /></a></main>
+  return (
+    <main className="mx-auto min-h-[65vh] max-w-2xl px-5 py-20 text-center">
+      <span className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl bg-gold-pale text-2xl">✦</span>
+      <h1 className="font-serif text-4xl font-semibold text-forest">That recipe wandered off.</h1>
+      <p className="mt-3 text-forest/60">Try the recipe collection and pick another dish.</p>
+      <a href="#/category/all" className="mt-7 inline-flex items-center gap-2 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white">
+        Browse recipes <Icon name="arrow" className="size-4" />
+      </a>
+    </main>
+  );
 }
 
 function Footer() {
@@ -459,131 +604,149 @@ function Footer() {
     <footer className="border-t border-forest/10 bg-white/45">
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
         <Brand />
-        <p className="text-xs leading-5 text-forest/45">A growing digital home for the recipes we return to.</p>
+        <p className="text-xs leading-5 text-forest/45">The Giant Book of Yum, compiled by Lisa Jensen and shared with her children, with love.</p>
         <div className="flex items-center gap-4 text-xs font-semibold text-forest/50">
           <span>Made for the middle of the table.</span>
-          <a href="#/admin" className="text-forest/40 transition hover:text-forest">Admin</a>
+          <a href="#/admin" className="text-forest/40 transition hover:text-forest">
+            Admin
+          </a>
         </div>
       </div>
     </footer>
-  )
+  );
 }
 
 function StatusMessage({ title, message, loading = false }) {
   return (
     <main className="mx-auto grid min-h-[65vh] max-w-xl place-items-center px-5 py-24 text-center">
       <div>
-        {loading && <span className="mx-auto mb-5 grid size-12 animate-pulse place-items-center rounded-2xl bg-sage-pale text-forest"><Icon name="bowl" className="size-6" /></span>}
+        {loading && (
+          <span className="mx-auto mb-5 grid size-12 animate-pulse place-items-center rounded-2xl bg-sage-pale text-forest">
+            <Icon name="bowl" className="size-6" />
+          </span>
+        )}
         <h1 className="font-serif text-2xl font-semibold text-forest sm:text-3xl">{title}</h1>
         {message && <p className="mt-3 text-sm text-forest/60">{message}</p>}
       </div>
     </main>
-  )
+  );
 }
 
 // Loads one full recipe; the summaries list only has titles and categories.
 function useRecipe(id, version) {
-  const [state, setState] = useState({ id: null, recipe: null, error: false })
+  const [state, setState] = useState({ id: null, recipe: null, error: false });
   useEffect(() => {
-    if (!id) return undefined
-    let cancelled = false
+    if (!id) return undefined;
+    let cancelled = false;
     fetchRecipe(id)
       .then((recipe) => !cancelled && setState({ id, recipe, error: false }))
-      .catch(() => !cancelled && setState({ id, recipe: null, error: true }))
-    return () => { cancelled = true }
-  }, [id, version])
-  return state.id === id ? state : { id, recipe: undefined, error: false }
+      .catch(() => !cancelled && setState({ id, recipe: null, error: true }));
+    return () => {
+      cancelled = true;
+    };
+  }, [id, version]);
+  return state.id === id ? state : { id, recipe: undefined, error: false };
 }
 
 export default function App() {
-  const [route, setRoute] = useState(parseRoute)
-  const [categories, setCategories] = useState([])
-  const [recipes, setRecipes] = useState(null)
-  const [loadError, setLoadError] = useState(false)
-  const [session, setSession] = useState(null)
-  const [canEdit, setCanEdit] = useState(false)
-  const [recipeVersion, setRecipeVersion] = useState(0)
+  const [route, setRoute] = useState(parseRoute);
+  const [categories, setCategories] = useState([]);
+  const [recipes, setRecipes] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [session, setSession] = useState(null);
+  const [canEdit, setCanEdit] = useState(false);
+  const [recipeVersion, setRecipeVersion] = useState(0);
 
-  const loadCollection = useCallback(() => (
-    Promise.all([fetchCategories(), fetchRecipeSummaries()])
-      .then(([categoryRows, recipeRows]) => {
-        setCategories(categoryRows)
-        setRecipes(recipeRows)
-      })
-      .catch(() => setLoadError(true))
-  ), [])
-
-  useEffect(() => {
-    if (isConfigured) loadCollection()
-  }, [loadCollection])
+  const loadCollection = useCallback(
+    () =>
+      Promise.all([fetchCategories(), fetchRecipeSummaries()])
+        .then(([categoryRows, recipeRows]) => {
+          setCategories(categoryRows);
+          setRecipes(recipeRows);
+        })
+        .catch(() => setLoadError(true)),
+    [],
+  );
 
   useEffect(() => {
-    if (!isConfigured) return undefined
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession))
-    return () => data.subscription.unsubscribe()
-  }, [])
+    if (isConfigured) loadCollection();
+  }, [loadCollection]);
 
-  const userId = session?.user?.id
+  useEffect(() => {
+    if (!isConfigured) return undefined;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  const userId = session?.user?.id;
   useEffect(() => {
     if (!userId) {
-      setCanEdit(false)
-      return undefined
+      setCanEdit(false);
+      return undefined;
     }
-    let cancelled = false
-    canEditRecipes().then((allowed) => !cancelled && setCanEdit(allowed)).catch(() => !cancelled && setCanEdit(false))
-    return () => { cancelled = true }
-  }, [userId])
+    let cancelled = false;
+    canEditRecipes()
+      .then((allowed) => !cancelled && setCanEdit(allowed))
+      .catch(() => !cancelled && setCanEdit(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     const update = () => {
-      setRoute(parseRoute())
-      window.scrollTo({ top: 0, behavior: 'instant' })
-    }
-    window.addEventListener('hashchange', update)
-    return () => window.removeEventListener('hashchange', update)
-  }, [])
+      setRoute(parseRoute());
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    };
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
 
-  const allCategories = useMemo(() => categoryRecipes(categories, recipes || []), [categories, recipes])
-  const categoriesMap = useMemo(() => Object.fromEntries(allCategories.map((category) => [category.id, category])), [allCategories])
-  const detailId = route.page === 'recipe' || route.page === 'edit' ? route.id : null
-  const detail = useRecipe(detailId, recipeVersion)
+  const allCategories = useMemo(() => categoryRecipes(categories, recipes || []), [categories, recipes]);
+  const categoriesMap = useMemo(() => Object.fromEntries(allCategories.map((category) => [category.id, category])), [allCategories]);
+  const detailId = route.page === 'recipe' || route.page === 'edit' ? route.id : null;
+  const detail = useRecipe(detailId, recipeVersion);
 
   function handleSaved(saved) {
-    setRecipeVersion((version) => version + 1)
-    loadCollection()
-    window.location.hash = `#/recipe/${saved.id}`
+    setRecipeVersion((version) => version + 1);
+    loadCollection();
+    window.location.hash = `#/recipe/${saved.id}`;
   }
 
   function handleDeleted(deleted) {
-    loadCollection()
-    window.location.hash = `#/category/${deleted.category}`
+    loadCollection();
+    window.location.hash = `#/category/${deleted.category}`;
   }
 
   async function signOut() {
-    await supabase.auth.signOut()
-    window.location.hash = '#/'
+    await supabase.auth.signOut();
+    window.location.hash = '#/';
   }
 
-  let content
-  if (!isConfigured) content = <StatusMessage title="The recipe box isn't connected yet." message="Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local (install/supabase/write_env_local.sh writes them), then restart the dev server." />
-  else if (loadError) content = <StatusMessage title="The recipe box is taking a moment." message="Refresh the page to load the collection." />
-  else if (route.page === 'admin') content = <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />
-  else if (!recipes) content = <StatusMessage title="Opening the recipe box…" loading />
-  else if (route.page === 'search') content = <SearchPage key={route.query} initialQuery={route.query} categoriesMap={categoriesMap} />
-  else if (route.page === 'home') content = <HomePage recipes={recipes} allCategories={allCategories} />
-  else if (route.page === 'category') content = <CategoryPage categoryId={route.id} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} />
+  let content;
+  if (!isConfigured) content = <StatusMessage title="The recipe box isn't connected yet." message="Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local (install/supabase/write_env_local.sh writes them), then restart the dev server." />;
+  else if (loadError) content = <StatusMessage title="The recipe box is taking a moment." message="Refresh the page to load the collection." />;
+  else if (route.page === 'admin') content = <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
+  else if (!recipes) content = <StatusMessage title="Opening the recipe box…" loading />;
+  else if (route.page === 'search') content = <SearchPage key={route.query} initialQuery={route.query} categoriesMap={categoriesMap} />;
+  else if (route.page === 'home') content = <HomePage recipes={recipes} allCategories={allCategories} />;
+  else if (route.page === 'category') content = <CategoryPage categoryId={route.id} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} />;
   else if ((route.page === 'new' || route.page === 'edit') && !canEdit) {
-    content = session
-      ? <StatusMessage title="This account can't edit recipes." message="Ask the site owner to make you an admin." />
-      : <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />
+    content = session ? <StatusMessage title="This account can't edit recipes." message="Ask the site owner to make you an admin." /> : <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
   } else if (route.page === 'new') {
-    content = <RecipeEditor key="new" defaultCategory={categoriesMap[route.category] ? route.category : undefined} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />
-  } else if (detail.error) content = <StatusMessage title="That recipe didn't load." message="Refresh the page to try again." />
-  else if (detail.recipe === undefined) content = <StatusMessage title="Finding the recipe…" loading />
-  else if (!detail.recipe) content = <NotFound />
-  else if (route.page === 'edit') content = <RecipeEditor key={`${detail.recipe.id}-${recipeVersion}`} recipe={detail.recipe} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />
-  else content = <RecipePage recipe={detail.recipe} categoriesMap={categoriesMap} canEdit={canEdit} />
+    content = <RecipeEditor key="new" defaultCategory={categoriesMap[route.category] ? route.category : undefined} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />;
+  } else if (detail.error) content = <StatusMessage title="That recipe didn't load." message="Refresh the page to try again." />;
+  else if (detail.recipe === undefined) content = <StatusMessage title="Finding the recipe…" loading />;
+  else if (!detail.recipe) content = <NotFound />;
+  else if (route.page === 'edit') content = <RecipeEditor key={`${detail.recipe.id}-${recipeVersion}`} recipe={detail.recipe} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />;
+  else content = <RecipePage recipe={detail.recipe} categoriesMap={categoriesMap} canEdit={canEdit} />;
 
-  return <div className="min-h-screen bg-cream text-forest"><Header canEdit={canEdit} page={route.page} />{content}<Footer /></div>
+  return (
+    <div className="min-h-screen bg-cream text-forest">
+      <Header canEdit={canEdit} page={route.page} />
+      {content}
+      <Footer />
+    </div>
+  );
 }

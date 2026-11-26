@@ -1,6 +1,8 @@
-# GBoy Recipe Book
+# GBoy: the Giant Book of Yum
 
-A recipe browser built with Vite, React, and Tailwind CSS. Recipes live in a hosted [Supabase](https://supabase.com) Postgres database that the browser reads directly, so the site still deploys as static files. Anyone can browse and search titles, ingredients, and directions; admins sign in with an emailed link to add, edit, and delete recipes. Hash-based navigation keeps pages compatible with GitHub Pages hosting.
+GBoy, the Giant Book of Yum, is a recipe collection compiled by Lisa Jensen from many sources and shared with her children, with love.
+
+This is a recipe browser built with Vite, React, and Tailwind CSS. Recipes live in a hosted [Supabase](https://supabase.com) Postgres database that the browser reads directly, so the site still deploys as static files. Anyone can browse and search titles, ingredients, and directions; admins sign in with an emailed link to add, edit, and delete recipes. Hash-based navigation keeps pages compatible with GitHub Pages hosting.
 
 ## Run locally
 

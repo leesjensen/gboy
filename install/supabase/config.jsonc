@@ -1,6 +1,6 @@
 {
   "$schema": "https://supabase.com/schemas/config/v1.json",
-  // Supabase CLI config for the GBoy Recipe Book. The scripts run the CLI with
+  // Supabase CLI config for GBoy (Giant Book of Yum). The scripts run the CLI with
   // `--workdir install`, so this folder is the project's supabase/ directory.
   //
   // Only the settings this project relies on are declared. `supabase config
@@ -41,7 +41,7 @@
       // ,"template": {
       //   // signInWithOtp sends the magic link template; it shows {{ .Token }}.
       //   "magic_link": {
-      //     "subject": "Your GBoy Recipe Book sign-in code",
+      //     "subject": "Your Giant Book of Yum sign-in code",
       //     "content_path": "./supabase/templates/magic_link.html"
       //   }
       // }
@@ -54,7 +54,7 @@
       //   "user": "env(SMTP_USER)",
       //   "pass": "env(SMTP_PASS)",
       //   "admin_email": "env(SMTP_ADMIN_EMAIL)",
-      //   "sender_name": "GBoy Recipe Book"
+      //   "sender_name": "Giant Book of Yum"
       // }
     }
   }

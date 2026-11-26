@@ -2,7 +2,7 @@
 
 ## Purpose and Current State
 
-This is a recipe browser built from `gboy.pdf`, a 273-page family cookbook. It has a welcoming home page, 12 recipe categories, category filters, a detail page for each entry, and admin editing. Recipes (about 822) live in a hosted Supabase Postgres database that the browser queries directly; there is no app server. `data/recipes.json` is the original extraction used to seed it. Search (`#/search/:query`, `src/Search.jsx`) calls the `search_recipes` database function, which ranks matches on the weighted `recipes.search` column (title, then subcategory, then recipe text).
+This is a recipe browser for GBoy, the Giant Book of Yum (`gboy.pdf`, 273 pages): recipes Lisa Jensen compiled from many sources and shares with her children. Use "GBoy" or "Giant Book of Yum" in user-facing copy. It has a welcoming home page, 12 recipe categories, category filters, a detail page for each entry, and admin editing. Recipes (about 822) live in a hosted Supabase Postgres database that the browser queries directly; there is no app server. `data/recipes.json` is the original extraction used to seed it. Search (`#/search/:query`, `src/Search.jsx`) calls the `search_recipes` database function, which ranks matches on the weighted `recipes.search` column (title, then subcategory, then recipe text).
 
 ## Architecture
 
