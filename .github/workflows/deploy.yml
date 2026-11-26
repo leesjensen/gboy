@@ -50,8 +50,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.set_version.outputs.version }}
-          SOURCE_SHA: ${{ github.event.head_commit.id }}
+          SOURCE_SHA: ${{ github.sha }}
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
-          RELEASE_NOTES: 'Deployed to $PAGE_URL. Source: $SOURCE_SHA'
         run: |
-          gh release create "version-$VERSION" --title "Version $VERSION" --notes "$RELEASE_NOTES" --target "$GITHUB_SHA" --latest --generate-notes
+          gh release create "version-$VERSION" \
+            --title "Version $VERSION" \
+            --notes "Deployed to $PAGE_URL. Source: $SOURCE_SHA" \
+            --target "$SOURCE_SHA" \
+            --latest \
+            --generate-notes
