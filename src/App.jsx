@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RecipeEditor, SignInPage } from './Admin.jsx';
+import { ImportPage } from './Import.jsx';
 import { SearchPage, searchHref } from './Search.jsx';
 import { canEditRecipes, fetchCategories, fetchRecipe, fetchRecipeSummaries, isConfigured, supabase } from './supabase.js';
 import { Breadcrumbs, Icon } from './ui.jsx';
@@ -75,6 +76,7 @@ function parseRoute() {
   if (segments[0] === 'recipe' && segments[1] && segments[2] === 'edit') return { page: 'edit', id: segments[1] };
   if (segments[0] === 'recipe' && segments[1]) return { page: 'recipe', id: segments[1] };
   if (segments[0] === 'new') return { page: 'new', category: segments[1] };
+  if (segments[0] === 'import') return { page: 'import', category: segments[1] };
   if (segments[0] === 'admin') return { page: 'admin' };
   if (segments[0] === 'search') {
     try {
@@ -756,10 +758,12 @@ export default function App() {
   else if (route.page === 'search') content = <SearchPage key={route.query} initialQuery={route.query} categoriesMap={categoriesMap} />;
   else if (route.page === 'home') content = <HomePage recipes={recipes} allCategories={allCategories} />;
   else if (route.page === 'category') content = <CategoryPage categoryId={route.id} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} />;
-  else if ((route.page === 'new' || route.page === 'edit') && !canEdit) {
+  else if (['new', 'edit', 'import'].includes(route.page) && !canEdit) {
     content = session ? <StatusMessage title="This account can't edit recipes." message="Ask the site owner to make you an admin." /> : <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
   } else if (route.page === 'new') {
     content = <RecipeEditor key="new" defaultCategory={categoriesMap[route.category] ? route.category : undefined} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />;
+  } else if (route.page === 'import') {
+    content = <ImportPage key={`import-${route.category || ''}`} defaultCategory={categoriesMap[route.category] ? route.category : ''} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />;
   } else if (detail.error) content = <StatusMessage title="That recipe didn't load." message="Refresh the page to try again." />;
   else if (detail.recipe === undefined) content = <StatusMessage title="Finding the recipe…" loading />;
   else if (!detail.recipe) content = <NotFound />;

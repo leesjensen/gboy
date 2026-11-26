@@ -59,7 +59,7 @@ function friendlyError(error) {
 
 export async function createRecipe(recipe) {
   const { data, error } = await supabase.from('recipes')
-    .insert({ id: recipe.id, ...toRow(recipe) }).select(detailColumns).single()
+    .insert({ id: recipe.id, ...toRow(recipe), source_text: recipe.sourceText || '' }).select(detailColumns).single()
   if (error) throw friendlyError(error)
   return data
 }
@@ -102,4 +102,17 @@ export async function searchRecipes(query, limit = 50) {
     sourcePage: row.source_page,
     match: row.match,
   }))
+}
+
+// Sends a photo to the import-recipe Edge Function, which reads it with Gemini
+// and returns { recipe, warnings }: a draft for the editor, not a saved recipe.
+export async function readRecipePhoto({ image, mimeType, category, subcategories }) {
+  const { data, error } = await supabase.functions.invoke('import-recipe', {
+    body: { image, mimeType, category, subcategories },
+  })
+  if (error) {
+    const details = await error.context?.json?.().catch(() => null)
+    throw new Error(details?.error || 'The photo could not be read. Try again in a moment.')
+  }
+  return data
 }

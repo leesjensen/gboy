@@ -52,6 +52,19 @@ To change the schema, add a migration with `supabase --workdir install migration
 
 Supabase's built-in mailer only sends a few emails per hour. That's fine for a few admins; enable the `smtp` block in `config.jsonc` and run `config push` for more.
 
+## Recipe photo import
+
+`functions/import-recipe` is an Edge Function that reads a recipe from a photo with Gemini. The app (`#/import`) shrinks the photo to 2000px, sends it with the chosen category and that category's subcategories, and opens the result in the recipe editor as a draft; nothing is saved until an admin reviews it and clicks **Add recipe**. Photos are not stored. The function checks the caller's session and `has_role('admin', 'recipe/*')` itself, so `verify_jwt` is off for it in `config.jsonc`.
+
+Set the Gemini key once (in your own terminal, so the key stays out of logs), then deploy:
+
+```sh
+supabase --workdir install secrets set GEMINI_API_KEY=your-key
+supabase --workdir install functions deploy import-recipe --use-api --no-verify-jwt
+```
+
+The function uses `gemini-3.8-flash`; set a `GEMINI_MODEL` secret to use another model. Redeploy after changing the function or its prompt.
+
 ## Data model
 
 `recipes` mirrors the JSON records: `id` (kebab-case, stable), `title`, `category_id`, `subcategory`, `source` (where the recipe came from, split out of titles written as "Dish (from Source)"), `source_page`, `source_end_page`, `blocks` (`jsonb` array of `{type, text}`), and `source_text`. It also has `created_at`, `updated_at`, `created_by`, and `updated_by`, which triggers maintain. `search` is a generated, weighted `tsvector` (title, then subcategory and source, then recipe text) with a GIN index. The app searches it through `search_recipes(p_query, p_limit)`, which requires every word (each also matching as a prefix), ranks title matches first, and returns the first matching recipe line.

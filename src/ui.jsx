@@ -7,6 +7,7 @@ export function Icon({ name, className = '' }) {
   if (name === 'leaf') return <svg {...shared}><path d="M19.5 4.5c-7 .2-12.7 2.4-13.7 7.2-.7 3.1 1.6 5.7 4.7 5.2 4.9-.8 7.5-6.1 9-12.4Z" /><path d="M4.5 20c2.8-4.5 6.4-7.5 11-10" /></svg>
   if (name === 'spark') return <svg {...shared}><path d="m12 3 1.7 6.3L20 11l-6.3 1.7L12 19l-1.7-6.3L4 11l6.3-1.7L12 3Z" /><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" /></svg>
   if (name === 'search') return <svg {...shared}><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>
+  if (name === 'camera') return <svg {...shared}><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" /><circle cx="12" cy="12.5" r="3.5" /></svg>
   if (name === 'plus') return <svg {...shared}><path d="M12 5v14M5 12h14" /></svg>
   if (name === 'edit') return <svg {...shared}><path d="M4.5 19.5h4l10-10a2.8 2.8 0 0 0-4-4l-10 10z" /><path d="m13 7 4 4" /></svg>
   if (name === 'trash') return <svg {...shared}><path d="M5 7h14M10 4h4m-7 3 .8 12h8.4L17 7m-6.5 3.5v5m3-5v5" /></svg>

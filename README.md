@@ -32,6 +32,7 @@ Review the affected recipe titles and text after regeneration, especially entrie
 - `src/App.jsx` contains the home page, category browser, recipe detail view, data loading, and hash routing.
 - `src/Admin.jsx` contains admin sign-in and the recipe editor.
 - `src/Search.jsx` contains the search page.
+- `src/Import.jsx` contains "Add from a photo", which sends a photo to the `import-recipe` Edge Function (Gemini) and opens the result as a draft.
 - `src/supabase.js` creates the Supabase client and holds every query.
 - `src/ui.jsx` has shared icons and breadcrumbs.
 - `src/index.css` defines the Tailwind theme and global styles.

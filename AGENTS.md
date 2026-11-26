@@ -7,6 +7,7 @@ This is a recipe browser for GBoy, the Giant Book of Yum (`gboy.pdf`, 273 pages)
 ## Architecture
 
 - `src/App.jsx` implements the pages, data loading, and lightweight hash routing (`#/category/:id`, `#/recipe/:id`, `#/recipe/:id/edit`, `#/new[/:category]`, `#/admin`, `#/search/:query`).
+- `src/Import.jsx` (`#/import[/:category]`) sends a recipe photo to the `import-recipe` Edge Function in `install/supabase/functions/`, which calls Gemini (key in Supabase secrets) and returns a draft for the editor; it never writes to the database.
 - `src/Admin.jsx` has magic-link sign-in and the recipe editor; `src/supabase.js` has the client and all queries; `src/ui.jsx` has shared `Icon` and `Breadcrumbs`.
 - `src/main.jsx` mounts React; `src/index.css` contains the Tailwind theme and shared styles.
 - The app loads category and recipe summaries on start and each recipe's full text when it is opened. It needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (`.env.local` locally, repository variables in CI). Row-level security allows public reads and writes only for users with an `admin` grant in `public.roles`.

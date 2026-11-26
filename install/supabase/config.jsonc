@@ -57,5 +57,14 @@
       //   "sender_name": "Giant Book of Yum"
       // }
     }
+  },
+
+  "functions": {
+    // Reads a recipe from a photo with Gemini (functions/import-recipe). The
+    // function checks the caller's session and admin role itself, which also
+    // works with Supabase's newer JWT signing keys.
+    "import-recipe": {
+      "verify_jwt": false
+    }
   }
 }

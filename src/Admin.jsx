@@ -10,10 +10,10 @@ const blockTypes = [
   { id: 'meta', label: 'Time / yield' },
 ]
 
-const inputClass = 'w-full rounded-xl border border-forest/12 bg-white px-3.5 py-2.5 text-sm text-forest outline-none transition placeholder:text-forest/35 focus:border-forest/40 focus:ring-2 focus:ring-sage-pale'
-const labelClass = 'mb-1.5 block text-[0.68rem] font-bold uppercase tracking-[0.16em] text-forest/55'
-const primaryButton = 'inline-flex items-center justify-center gap-2 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-light disabled:cursor-not-allowed disabled:opacity-50'
-const quietButton = 'inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-forest/70 ring-1 ring-forest/12 transition hover:bg-white hover:text-forest'
+export const inputClass = 'w-full rounded-xl border border-forest/12 bg-white px-3.5 py-2.5 text-sm text-forest outline-none transition placeholder:text-forest/35 focus:border-forest/40 focus:ring-2 focus:ring-sage-pale'
+export const labelClass = 'mb-1.5 block text-[0.68rem] font-bold uppercase tracking-[0.16em] text-forest/55'
+export const primaryButton = 'inline-flex items-center justify-center gap-2 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-light disabled:cursor-not-allowed disabled:opacity-50'
+export const quietButton = 'inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-forest/70 ring-1 ring-forest/12 transition hover:bg-white hover:text-forest'
 
 export function slugify(text) {
   return text.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -22,7 +22,7 @@ export function slugify(text) {
 
 const validId = (id) => /^[a-z0-9]+(-[a-z0-9]+)*$/.test(id)
 
-function AdminShell({ crumb, title, eyebrow, children }) {
+export function AdminShell({ crumb, title, eyebrow, children }) {
   return (
     <main className="mx-auto min-h-[70vh] max-w-4xl px-5 pb-20 pt-8 sm:px-8 sm:pt-12">
       <Breadcrumbs>{crumb}</Breadcrumbs>
@@ -53,6 +53,7 @@ export function SignInPage({ session, canEdit, onSignOut }) {
           </p>
           <div className="flex flex-wrap gap-3">
             {canEdit && <a href="#/new" className={primaryButton}><Icon name="plus" className="size-4" /> Add a recipe</a>}
+            {canEdit && <a href="#/import" className={quietButton}><Icon name="camera" className="size-4" /> Add from a photo</a>}
             <button type="button" onClick={onSignOut} className={quietButton}>Sign out</button>
           </div>
         </div>
@@ -108,19 +109,22 @@ export function SignInPage({ session, canEdit, onSignOut }) {
 let nextKey = 1
 const withKey = (block) => ({ ...block, key: nextKey++ })
 
-export function RecipeEditor({ recipe, defaultCategory, categories, summaries, onSaved, onDeleted }) {
+// Edits a saved recipe, or creates one (from scratch, or from a `draft` such as
+// a recipe read from a photo). `intro` is shown above the form.
+export function RecipeEditor({ recipe, draft, intro, defaultCategory, categories, summaries, onSaved, onDeleted }) {
   const isNew = !recipe
+  const initial = recipe || draft
   const [form, setForm] = useState(() => ({
-    title: recipe?.title || '',
+    title: initial?.title || '',
     id: recipe?.id || '',
-    category: recipe?.category || defaultCategory || categories[0]?.id || '',
-    subcategory: recipe?.subcategory || '',
-    source: recipe?.source || '',
-    sourcePage: recipe?.sourcePage ?? '',
-    sourceEndPage: recipe?.sourceEndPage ?? '',
+    category: initial?.category || defaultCategory || categories[0]?.id || '',
+    subcategory: initial?.subcategory || '',
+    source: initial?.source || '',
+    sourcePage: initial?.sourcePage ?? '',
+    sourceEndPage: initial?.sourceEndPage ?? '',
   }))
   const [idTouched, setIdTouched] = useState(false)
-  const [blocks, setBlocks] = useState(() => (recipe?.blocks?.length ? recipe.blocks : [{ type: 'ingredient', text: '' }, { type: 'step', text: '' }]).map(withKey))
+  const [blocks, setBlocks] = useState(() => (initial?.blocks?.length ? initial.blocks : [{ type: 'ingredient', text: '' }, { type: 'step', text: '' }]).map(withKey))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -152,6 +156,7 @@ export function RecipeEditor({ recipe, defaultCategory, categories, summaries, o
       const payload = {
         ...form,
         id,
+        sourceText: draft?.sourceText || '',
         sourcePage: Number(form.sourcePage) || null,
         sourceEndPage: Number(form.sourceEndPage) || null,
         blocks: blocks.map(({ type, text }) => ({ type, text: text.trim() })).filter((block) => block.text),
@@ -181,7 +186,15 @@ export function RecipeEditor({ recipe, defaultCategory, categories, summaries, o
     : <><a href={`#/recipe/${recipe.id}`} className="max-w-[15rem] truncate transition hover:text-forest">{recipe.title}</a><span>/</span><span className="text-forest">Edit</span></>
 
   return (
-    <AdminShell crumb={crumb} eyebrow={isNew ? 'Add to the collection' : 'Edit recipe'} title={isNew ? 'New recipe' : recipe.title}>
+    <AdminShell crumb={crumb} eyebrow={draft ? 'Read from a photo' : isNew ? 'Add to the collection' : 'Edit recipe'} title={isNew ? 'New recipe' : recipe.title}>
+      {intro}
+      {isNew && !draft && (
+        <a href={`#/import${form.category ? `/${form.category}` : ''}`} className="mb-6 flex items-center gap-3 rounded-2xl bg-gold-pale/70 px-4 py-3 text-sm text-forest/75 transition hover:bg-gold-pale">
+          <Icon name="camera" className="size-5 shrink-0 text-coral" />
+          <span><strong className="font-semibold text-forest">Have it on paper?</strong> Take a photo and let the recipe be read for you.</span>
+          <Icon name="arrow" className="ml-auto size-4 shrink-0" />
+        </a>
+      )}
       <form onSubmit={save} className="space-y-6">
         <section className="grid gap-5 rounded-[1.65rem] bg-white p-5 shadow-sm ring-1 ring-forest/8 sm:grid-cols-2 sm:p-7">
           <div className="sm:col-span-2">
