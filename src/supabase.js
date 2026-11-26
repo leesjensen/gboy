@@ -12,7 +12,7 @@ export const supabase = isConfigured
 
 // PostgREST aliases map the table columns onto the app's camelCase shape.
 const summaryColumns = 'id, title, category:category_id, subcategory, sourcePage:source_page'
-const detailColumns = `${summaryColumns}, sourceEndPage:source_end_page, blocks, sourceText:source_text`
+const detailColumns = `${summaryColumns}, source, sourceEndPage:source_end_page, blocks, sourceText:source_text`
 const pageSize = 1000
 
 function check({ data, error }) {
@@ -44,6 +44,7 @@ function toRow(recipe) {
     title: recipe.title.trim(),
     category_id: recipe.category,
     subcategory: recipe.subcategory.trim(),
+    source: recipe.source.trim(),
     source_page: recipe.sourcePage || null,
     source_end_page: recipe.sourceEndPage || null,
     blocks: recipe.blocks,

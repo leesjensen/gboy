@@ -164,6 +164,9 @@ BELGIAN_SHORT = [
 ]
 
 
+TITLE_COLUMNS = (21.6, 323.8)
+
+
 def is_title(row, page_rows, index):
     original = row["text"].strip()
     title = re.sub(r"^\*+\s*", "", original).strip()
@@ -178,6 +181,23 @@ def is_title(row, page_rows, index):
     if re.match(r"^(?:fold|add|place|turn|stir|combine|bake|cook|melt|heat|mix|pour|let|cool|brush|preheat|whisk|transfer|spread|serve|use|remove|set|cut|chop|season|refrigerate|drizzle|sprinkle|top)\b", title, re.I):
         return False
     if re.search(r"\b(?:read more:|http://|https://|until|stirring|should|cook for|remove from|place in)\b", title, re.I):
+        return False
+    # Titles start at the left margin, or at the middle of the page on the
+    # two-column smoothie pages. Other positions are ingredient columns
+    # (x≈223, x≈425), wrapped lines indented under them (x≈241, x≈443), or
+    # sub-headings such as "For Filling" inside a recipe.
+    if not any(abs(row["x"] - start) <= 5 for start in TITLE_COLUMNS):
+        return False
+    # Ingredient fragments and wrapped lines: "kosher salt", "(granny smith
+    # is best)", "zest of 1 orange". Lowercase titles are real only when they
+    # credit a source ("crispy fried chickpeas (from Maria Rodale's Scratch)").
+    if title[:1] in "(-–—&" or (title.startswith("[") and title.endswith("]")):
+        return False
+    if title[:1].islower() and "from" not in title.lower():
+        return False
+    if title.endswith(")") and "(" not in title:
+        return False
+    if re.match(r"^(?:pinch|dash|juice of|zest of|for (?:the )?(?:filling|frosting|dough|topping|sauce|glaze|crust)\b)", title, re.I):
         return False
 
     y = row["y"]
@@ -216,6 +236,21 @@ def is_title(row, page_rows, index):
     return saw_material and (previous_gap >= 20 or first_in_column)
 
 
+SOURCE_CREDIT = re.compile(r"^(.*?)\s*\(\s*from\s+([^()]*)\)\s*(.*)$", re.I)
+
+
+def split_source(title):
+    """Move a "(from ...)" credit out of a title into its own field. Any note
+    after the credit stays in the title: "Cake (from blendtec.com) - DIVINE"
+    becomes ("Cake - DIVINE", "blendtec.com"). Mirrors the SQL in
+    install/supabase/migrations/20261127000000_recipe_source.sql."""
+    match = SOURCE_CREDIT.match(title)
+    if not match or not match.group(1).strip():
+        return title, ""
+    before, source, after = (part.strip() for part in match.groups())
+    return " ".join(part for part in (before, after) if part), source
+
+
 def slugify(value):
     normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-z0-9]+", "-", normalized.lower()).strip("-")
@@ -226,7 +261,8 @@ NOTE_START = re.compile(
     r"^(?:\*|notes?\b|tips?\b|hint\b|variations?\b|options?\b|optional\b|source\b|from\b|recipe from\b|adapted\b|this (?:recipe|is)\b|these (?:are|freeze)\b)",
     re.I,
 )
-NUMBERED_STEP = re.compile(r"^\d+[.)]\s")
+# Authored step numbers are small; "350. Butter the pan" continues "Preheat oven to".
+NUMBERED_STEP = re.compile(r"^(?:[1-9]|[1-3]\d)[.)]\s")
 SENTENCE_END = (".", "!", "?")
 # Words that end in a period without ending a sentence.
 ABBREVIATIONS = {
@@ -264,7 +300,14 @@ def join_wrapped_lines(lines):
             continue
         if joined:
             previous = joined[-1]
-            continues_word = text[:1].islower() or text[:1] in ",;()&"
+            # A line that is only a parenthetical, like "(granny smith is best)",
+            # or one left open, finishes the item above; "(optional) fresh sage" starts a new one.
+            continues_word = (
+                text[:1].islower() or text[:1] in ",;)&"
+                or re.fullmatch(r"\([^()]*(?:\)\.?)?", text) is not None
+                # "Mills)" closes "(Bob's Red Mill or Arrowhead" on the line above.
+                or (text.count(")") > text.count("(") and previous.count("(") > previous.count(")"))
+            )
             in_ingredient = INGREDIENT_START.match(previous) and not NUMBERED_STEP.match(previous)
             open_paragraph = (is_prose_line(previous) and not in_ingredient
                               and not previous.endswith(SENTENCE_END + (":",)))
@@ -295,8 +338,17 @@ def split_sentences(text):
 def split_steps(text):
     """Turn a direction paragraph into steps of one or more whole sentences."""
     if NUMBERED_STEP.match(text):
-        # Keep authored numbering; split "1. Mix. 2. Bake." run together on one line.
-        return [part.strip() for part in re.split(r"\s+(?=\d+[.)]\s)", text) if part.strip()]
+        # Keep authored numbering; split "1. Mix. 2. Bake." run together on one
+        # line, but only at the next number, so "Preheat oven to 350. Butter" stays.
+        parts, start = [], 0
+        expected = int(re.match(r"\d+", text).group()) + 1
+        for match in re.finditer(r"\s+(\d+)[.)](?=\s)", text):
+            if int(match.group(1)) == expected:
+                parts.append(text[start:match.start()].strip())
+                start = match.start()
+                expected += 1
+        parts.append(text[start:].strip())
+        return [part for part in parts if part]
     steps = []
     for sentence in split_sentences(text):
         if steps and (len(sentence) < SHORT_SENTENCE or len(steps[-1]) < SHORT_SENTENCE):
@@ -306,14 +358,90 @@ def split_steps(text):
     return steps
 
 
+SECTION_WORDS = re.compile(
+    r"\b(?:toppings?|fillings?|frosting|icing|glaze|dough|sauce|crust|cake|cupcakes|brownies?|base|layer|batter|"
+    r"biga|soaker|streusel|marinade|garnish|decorations|dressing|vinaigrette|dumplings|meatballs|soup|salad|wraps?|"
+    r"raita|bread|muffins|coffeecake|churros|french toast|chicken|rice|beans|sofrito|cheese|eggs|ingredients|"
+    r"ganache|spread|butter|sauce|tzatziki|mix|ramen|add-ins|assembly|finishing)\b",
+    re.I,
+)
+FOOD_START = re.compile(r"^(?:salt|pepper|kosher|black pepper|sugar|water|oil|olive oil|vanilla)\b", re.I)
+
+
+def is_heading(text, following):
+    """A sub-heading such as "Cookie Base" or "FILLING" that starts a group of
+    ingredients or steps, as opposed to an ingredient with no quantity."""
+    words = text.rstrip(":").split()
+    if not 1 <= len(words) <= 6 or len(text) > 45 or re.search(r"\d|[¼½¾⅓⅔⅛]|,", text):
+        return False
+    if FOOD_START.match(text) or not following:
+        return False
+    if not (INGREDIENT_START.match(following) or NUMBERED_STEP.match(following) or len(following) > 60):
+        return False
+    minor = {"and", "of", "with", "for", "the", "&", "or", "a", "in", "-"}
+    title_case = words[0][:1].isupper() and all(w[:1].isupper() or w.lower() in minor for w in words)
+    if not title_case:
+        return False
+    # A single word is a heading only when it names a part of a recipe ("Filling"),
+    # so lone ingredients such as "Bacon" or "Toothpicks" stay ingredients.
+    return len(words) > 1 or text.isupper() or SECTION_WORDS.search(text) is not None
+
+
+QUANTITY = r"(?:\d+(?:\s*[-/]\s*\d+)?(?:\s*[¼½¾⅓⅔⅛⅜⅝⅞])?(?:-\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|one|two|three|four)"
+UNIT_ONLY = r"(?:c|t|T|cups?|tsp|tbsp|oz|lbs?|g|ml|qt)\.?"
+NOT_A_NEW_ITEM = {
+    "or", "and", "plus", "with", "about", "to", "each", "per", "into", "of", "in", "by", "than", "x", "makes",
+    "make", "add", "use", "using", "substitute", "substituted", "for", "scant", "heaping", "generous", "approx",
+    "approximately", "additional", "another", "yields", "serves",
+}
+TIME_UNIT = re.compile(r"^\s*(?:minutes?|mins?|hours?|hrs?|degrees?|seconds?|inch|inches|in\b)", re.I)
+
+
+def split_ingredients(text):
+    """Split "1 c whipping cream 2 T sugar ½ t vanilla", where the PDF put
+    several ingredients on one line, into one ingredient each."""
+    if "*" in text:
+        return [text]
+    parts, start, depth = [], 0, 0
+    for match in re.finditer(r"[()]|(?<=[A-Za-z\)\.])\s+(?=" + QUANTITY + r"\s+[A-Za-z])", text, re.I):
+        token = match.group()
+        if token == "(":
+            depth += 1
+            continue
+        if token == ")":
+            depth = max(0, depth - 1)
+            continue
+        if depth:
+            continue
+        before = text[start:match.start()].strip()
+        after = text[match.end():]
+        previous_word = before.split()[-1].lower().strip(".,") if before.split() else ""
+        # "2 c 4 c warm water" lists two batch sizes, not two ingredients.
+        quantity_only = re.fullmatch(QUANTITY + r"\s*(?:" + UNIT_ONLY + r")?", before, re.I)
+        unit_after = re.match(QUANTITY + r"\s+(\S+)", after, re.I)
+        if previous_word in NOT_A_NEW_ITEM or quantity_only or not re.search(r"[A-Za-z]{2}", before):
+            continue
+        if unit_after and TIME_UNIT.match(unit_after.group(1)):
+            continue
+        parts.append(before)
+        start = match.end()
+    parts.append(text[start:].strip())
+    return [part for part in parts if part]
+
+
 def recipe_blocks(lines):
     blocks = []
     seen_ingredient = False
-    for text in join_wrapped_lines(lines):
+    joined = join_wrapped_lines(lines)
+    for index, text in enumerate(joined):
+        following = joined[index + 1] if index + 1 < len(joined) else ""
         kind = classify_line(text)
+        if kind == "ingredient" and is_heading(text, following):
+            kind = "label"
         if kind == "ingredient":
             seen_ingredient = True
-        if kind != "prose":
+            blocks.extend({"type": "ingredient", "text": part} for part in split_ingredients(text))
+        elif kind != "prose":
             blocks.append({"type": kind, "text": text})
         elif NOTE_START.match(text) or not seen_ingredient:
             # Introductions before the ingredients, and marked notes, stay whole.
@@ -393,19 +521,21 @@ def main():
         row = pages[candidate["page"]][candidate["index"]]
         if not candidate["title"].rstrip().endswith(("-", "(")):
             continue
-        continuation = next((
-            other for other in candidates
-            if other is not candidate
-            and other["page"] == candidate["page"]
-            and abs(pages[other["page"]][other["index"]]["y"] - row["y"]) < 2
-            and pages[other["page"]][other["index"]]["x"] != row["x"]
-            and pages[other["page"]][other["index"]]["text"].lstrip().startswith(("“", "\"", "'"))
+        page_rows = pages[candidate["page"]]
+        continuation_index = next((
+            i for i, other in enumerate(page_rows)
+            if other is not row
+            and abs(other["y"] - row["y"]) < 2
+            and other["x"] != row["x"]
+            and other["text"].lstrip().startswith(("“", "\"", "'"))
         ), None)
-        if continuation:
-            continuation_row = pages[continuation["page"]][continuation["index"]]
-            candidate["title"] = candidate["title"].rstrip("- (") + " " + continuation_row["text"].strip()
-            candidate["skipRows"] = [(continuation["page"], continuation["index"])]
-            candidates.remove(continuation)
+        if continuation_index is not None:
+            candidate["title"] = candidate["title"].rstrip("- (") + " " + page_rows[continuation_index]["text"].strip()
+            candidate["skipRows"] = [(candidate["page"], continuation_index)]
+            candidates[:] = [
+                other for other in candidates
+                if (other["page"], other["index"]) != (candidate["page"], continuation_index)
+            ]
             break
 
     # The introductory Belgian section has ten brief family recipes in a
@@ -506,6 +636,9 @@ def main():
         base = slugify(recipe["title"])
         counts[base] = counts.get(base, 0) + 1
         recipe["id"] = base if counts[base] == 1 else base + "-" + str(counts[base])
+        # IDs come from the full title above so links stay stable; the credit
+        # moves to its own field afterwards.
+        recipe["title"], recipe["source"] = split_source(recipe["title"])
         recipe.pop("page", None)
         recipe.pop("index", None)
 

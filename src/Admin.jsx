@@ -115,6 +115,7 @@ export function RecipeEditor({ recipe, defaultCategory, categories, summaries, o
     id: recipe?.id || '',
     category: recipe?.category || defaultCategory || categories[0]?.id || '',
     subcategory: recipe?.subcategory || '',
+    source: recipe?.source || '',
     sourcePage: recipe?.sourcePage ?? '',
     sourceEndPage: recipe?.sourceEndPage ?? '',
   }))
@@ -186,6 +187,11 @@ export function RecipeEditor({ recipe, defaultCategory, categories, summaries, o
           <div className="sm:col-span-2">
             <label htmlFor="title" className={labelClass}>Title</label>
             <input id="title" required value={form.title} onChange={set('title')} className={inputClass} />
+          </div>
+          <div className="sm:col-span-2">
+            <label htmlFor="source" className={labelClass}>Source (optional)</label>
+            <input id="source" value={form.source} onChange={set('source')} className={inputClass} placeholder="Good Housekeeping, Jan/Feb 2020, p. 110" />
+            <p className="mt-1.5 text-xs text-forest/45">Where the recipe came from. Shown as “From …” under the title.</p>
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="recipe-id" className={labelClass}>ID (used in links)</label>

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Turn data/recipes.json into a seed.sql of batched, idempotent upserts.
 
-usage: seed_recipes.py RECIPES_JSON OUT_SQL keep|overwrite
+usage: seed_recipes.py RECIPES_JSON OUT_SQL keep|overwrite [prune]
+
+With prune, recipes missing from the JSON are deleted, unless someone created
+or saved them in the app (created_by / updated_by is set).
 """
 import json
 import sys
@@ -23,6 +26,7 @@ def dollar_quote(text):
 
 def main():
     source, out_file, mode = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+    prune = sys.argv[4:] == ["prune"]
     recipes = json.loads(source.read_text(encoding="utf-8"))
 
     categories = {}
@@ -45,12 +49,15 @@ on conflict (id) do update set name = excluded.name, sort_order = excluded.sort_
     conflict = (
         """do update set
   title = excluded.title,
+  source = excluded.source,
   category_id = excluded.category_id,
   subcategory = excluded.subcategory,
   source_page = excluded.source_page,
   source_end_page = excluded.source_end_page,
   blocks = excluded.blocks,
-  source_text = excluded.source_text"""
+  source_text = excluded.source_text
+-- Recipes saved in the app keep their edits.
+where public.recipes.updated_by is null"""
         if mode == "overwrite" else "do nothing"
     )
 
@@ -61,6 +68,7 @@ on conflict (id) do update set name = excluded.name, sort_order = excluded.sort_
                 "title": r["title"],
                 "category_id": r["category"],
                 "subcategory": r.get("subcategory") or "",
+                "source": r.get("source") or "",
                 "source_page": r.get("sourcePage"),
                 "source_end_page": r.get("sourceEndPage"),
                 "blocks": r.get("blocks") or [],
@@ -70,18 +78,27 @@ on conflict (id) do update set name = excluded.name, sort_order = excluded.sort_
         ]
         sql = f"""
 insert into public.recipes
-  (id, title, category_id, subcategory, source_page, source_end_page, blocks, source_text)
-select id, title, category_id, subcategory, source_page, source_end_page, blocks, source_text
+  (id, title, category_id, subcategory, source, source_page, source_end_page, blocks, source_text)
+select id, title, category_id, subcategory, source, source_page, source_end_page, blocks, source_text
 from jsonb_to_recordset({dollar_quote(json.dumps(rows, ensure_ascii=False))}::jsonb)
-  as r(id text, title text, category_id text, subcategory text,
+  as r(id text, title text, category_id text, subcategory text, source text,
        source_page integer, source_end_page integer, blocks jsonb, source_text text)
 on conflict (id) {conflict};
 """
         parts.append(sql)
 
+    if prune:
+        ids = json.dumps([r["id"] for r in recipes])
+        parts.append(f"""
+-- Remove recipes the JSON no longer has, but never ones touched in the app.
+delete from public.recipes
+where created_by is null and updated_by is null
+  and id not in (select jsonb_array_elements_text({dollar_quote(ids)}::jsonb));
+""")
+
     out_file.write_text("".join(parts), encoding="utf-8")
 
-    print(f"Prepared {len(category_rows)} categories and {len(recipes)} recipes ({mode})")
+    print(f"Prepared {len(category_rows)} categories and {len(recipes)} recipes ({mode}{', prune' if prune else ''})")
 
 
 if __name__ == "__main__":

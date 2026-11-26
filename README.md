@@ -18,7 +18,7 @@ See `install/supabase/README.md` to create the database and add admins. Vite pri
 
 Admins edit recipes in the app: open **Admin** in the footer, sign in with the emailed link, then use **Add recipe** or a recipe's **Edit** button. Recipe IDs never change after creation, so links keep working.
 
-The original extraction is in `data/recipes.json`, which seeds the database (`install/supabase/seed_recipes.sh`). Edits made in the app live only in the database. Records include a stable ID, category and subcategory, source page, formatted recipe blocks, and the source transcription. The PDF is the source of truth. To rebuild the extracted collection on macOS:
+The original extraction is in `data/recipes.json`, which seeds the database (`install/supabase/seed_recipes.sh`). Edits made in the app live only in the database. Records include a stable ID, title, source ("from …" credit), category and subcategory, source page, formatted recipe blocks, and the source transcription. The PDF is the source of truth. To rebuild the extracted collection on macOS:
 
 ```sh
 swift scripts/extract_pdf_lines.swift gboy.pdf /tmp/gboy-lines.json

@@ -42,7 +42,7 @@ This starts Supabase in Docker and runs `db reset` to rebuild the database from 
 | `config.jsonc` | Declares only the settings this project relies on: the seed path, site and redirect URLs, sign-ups off, email sign-in (links expire after 10 minutes). `config push` changes just these on the hosted project. Commented `smtp` and email template blocks are ready for a real mail server |
 | `migrations/` | Schema (`categories`, `recipes`, `roles`, audit triggers, full-text `search` column), the ranked `search_recipes` function, public read RLS, and role-based write RLS |
 | `templates/magic_link.html` | A sign-in email that shows a 6-digit code (`{{ .Token }}`). Unused until custom SMTP is set up, because the free plan doesn't allow custom templates with the built-in mailer |
-| `seed_recipes.sh [--local] [--force]` | Generates `seed.sql` from `data/recipes.json` and loads it. By default only new IDs are inserted, so database edits are kept. `--force` overwrites existing rows with the JSON |
+| `seed_recipes.sh [--local] [--force] [--prune]` | Generates `seed.sql` from `data/recipes.json` and loads it. By default only new IDs are inserted, so database edits are kept. `--force` overwrites existing rows with the JSON. `--prune` deletes recipes the JSON no longer has, except ones created or saved in the app |
 | `add_admin.sh [--local] [--remove] email ['*'\|'recipe/*']` | Creates the auth user if needed and grants (or removes) `admin` on `*` (default) or `recipe/*`. `--list` shows all grants |
 | `write_env_local.sh [--local]` | Writes the app's `.env.local` for the hosted or local API |
 
@@ -54,7 +54,7 @@ Supabase's built-in mailer only sends a few emails per hour. That's fine for a f
 
 ## Data model
 
-`recipes` mirrors the JSON records: `id` (kebab-case, stable), `title`, `category_id`, `subcategory`, `source_page`, `source_end_page`, `blocks` (`jsonb` array of `{type, text}`), and `source_text`. It also has `created_at`, `updated_at`, `created_by`, and `updated_by`, which triggers maintain. `search` is a generated, weighted `tsvector` with a GIN index. The app searches it through `search_recipes(p_query, p_limit)`, which requires every word (each also matching as a prefix), ranks title matches first, and returns the first matching recipe line.
+`recipes` mirrors the JSON records: `id` (kebab-case, stable), `title`, `category_id`, `subcategory`, `source` (where the recipe came from, split out of titles written as "Dish (from Source)"), `source_page`, `source_end_page`, `blocks` (`jsonb` array of `{type, text}`), and `source_text`. It also has `created_at`, `updated_at`, `created_by`, and `updated_by`, which triggers maintain. `search` is a generated, weighted `tsvector` (title, then subcategory and source, then recipe text) with a GIN index. The app searches it through `search_recipes(p_query, p_limit)`, which requires every word (each also matching as a prefix), ranks title matches first, and returns the first matching recipe line.
 
 Permissions live in `roles` as actor / object / predicate triples:
 

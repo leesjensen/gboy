@@ -430,16 +430,41 @@ function metaLabel(text) {
     .replace(/\s+--\s+/g, ' · ');
 }
 
+// Splits a recipe into its ingredient and direction columns, keeping section
+// headings ("Filling", "Topping") in place. A heading goes in the column of the
+// lines it introduces, and step numbers restart after each heading.
+function recipeColumns(blocks) {
+  const ingredientColumn = [];
+  const directionColumn = [];
+  let stepNumber = 0;
+  blocks.forEach((block, index) => {
+    if (block.type === 'label') {
+      const next = blocks.slice(index + 1).find((item) => item.type !== 'label');
+      if (next?.type === 'ingredient') ingredientColumn.push(block);
+      else {
+        directionColumn.push(block);
+        stepNumber = 0;
+      }
+    } else if (block.type === 'ingredient') ingredientColumn.push(block);
+    else if (block.type === 'step') directionColumn.push({ ...block, number: ++stepNumber });
+    else directionColumn.push(block);
+  });
+  return { ingredientColumn, directionColumn };
+}
+
+function SectionLabel({ text, first, as: Tag = 'li' }) {
+  return <Tag className={`list-none font-serif text-lg font-semibold text-forest ${first ? '' : 'pt-3'}`}>{text.replace(/:$/, '')}</Tag>;
+}
+
 function RecipePage({ recipe, categoriesMap, canEdit }) {
   const category = categoriesMap[recipe.category];
   const categoryName = category?.name || recipe.category;
   const meta = recipe.blocks.filter((block) => block.type === 'meta');
   const bodyBlocks = recipe.blocks.filter((block) => block.type !== 'meta');
-  const ingredients = bodyBlocks.filter((block) => block.type === 'ingredient');
-  const steps = bodyBlocks.filter((block) => block.type === 'step');
-  const labels = bodyBlocks.filter((block) => block.type === 'label');
-  const notes = bodyBlocks.filter((block) => block.type === 'note');
-  const hasStructuredParts = ingredients.length > 0 || steps.length > 0;
+  const { ingredientColumn, directionColumn } = recipeColumns(bodyBlocks);
+  const ingredientCount = ingredientColumn.filter((block) => block.type === 'ingredient').length;
+  const stepCount = directionColumn.filter((block) => block.type === 'step').length;
+  const hasStructuredParts = ingredientCount > 0 || stepCount > 0;
 
   return (
     <main className="mx-auto min-h-[70vh] max-w-7xl px-5 pb-20 pt-8 sm:px-8 sm:pt-12 lg:px-12">
@@ -464,6 +489,7 @@ function RecipePage({ recipe, categoriesMap, canEdit }) {
             {recipe.subcategory && <span className="rounded-full bg-white px-3.5 py-1.5 text-[0.67rem] font-semibold text-forest/55 ring-1 ring-forest/8">{recipe.subcategory}</span>}
           </div>
           <h1 className="max-w-4xl font-serif text-4xl font-semibold leading-[1.08] tracking-tight text-forest sm:text-5xl lg:text-[3.55rem]">{recipe.title}</h1>
+          {recipe.source && <p className="mt-3 max-w-3xl font-serif text-lg italic leading-snug text-forest/65 sm:text-xl">From {recipe.source}</p>}
           <p className="mt-4 flex items-center gap-2 text-sm text-forest/50">
             <Icon name="book" className="size-4" /> Giant Book of Yum
             {recipe.sourcePage && (
@@ -492,45 +518,43 @@ function RecipePage({ recipe, categoriesMap, canEdit }) {
               <section className="rounded-[1.65rem] bg-sage-pale/65 p-5 sm:p-6">
                 <div className="mb-5 flex items-center justify-between">
                   <h2 className="font-serif text-2xl font-semibold text-forest">Ingredients</h2>
-                  <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-forest/50">{ingredients.length} items</span>
+                  <span className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-forest/50">{ingredientCount} items</span>
                 </div>
                 <ul className="space-y-3.5">
-                  {ingredients.map((block, index) => (
-                    <li key={index} className="flex gap-3 text-sm leading-6 text-forest/75">
-                      <span className="mt-[0.52rem] size-1.5 shrink-0 rounded-full bg-coral" />
-                      {block.text}
-                    </li>
-                  ))}
-                </ul>
-                {labels.length > 0 && (
-                  <div className="mt-6 space-y-2 border-t border-forest/10 pt-4">
-                    {labels.map((block, index) => (
-                      <p key={index} className="font-semibold text-forest">
+                  {ingredientColumn.map((block, index) =>
+                    block.type === 'label' ? (
+                      <SectionLabel key={index} text={block.text} first={index === 0} />
+                    ) : (
+                      <li key={index} className="flex gap-3 text-sm leading-6 text-forest/75">
+                        <span className="mt-[0.52rem] size-1.5 shrink-0 rounded-full bg-coral" />
                         {block.text}
-                      </p>
-                    ))}
-                  </div>
-                )}
+                      </li>
+                    ),
+                  )}
+                </ul>
               </section>
               <section className="rounded-[1.65rem] bg-white p-5 shadow-sm ring-1 ring-forest/8 sm:p-6">
                 <h2 className="mb-5 font-serif text-2xl font-semibold text-forest">Let’s make it</h2>
                 <div className="space-y-4">
-                  {steps.map((block, index) => {
+                  {directionColumn.map((block, index) => {
+                    if (block.type === 'label') return <SectionLabel key={index} as="h3" text={block.text} first={index === 0} />;
+                    if (block.type === 'note') {
+                      return (
+                        <p key={index} className="text-sm leading-6 text-forest/65">
+                          {block.text}
+                        </p>
+                      );
+                    }
                     const numbered = block.text.match(/^(\d+)[.)]\s*(.*)$/);
                     return (
                       <div key={index} className="flex gap-3.5 text-sm leading-6 text-forest/70">
-                        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-cream text-xs font-bold text-forest">{numbered?.[1] || index + 1}</span>
+                        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-cream text-xs font-bold text-forest">{numbered?.[1] || block.number}</span>
                         <p>{numbered?.[2] || block.text}</p>
                       </div>
                     );
                   })}
-                  {notes.map((block, index) => (
-                    <p key={`note-${index}`} className="text-sm leading-6 text-forest/65">
-                      {block.text}
-                    </p>
-                  ))}
                 </div>
-                {!steps.length && <p className="text-sm leading-6 text-forest/60">The source has ingredient notes but no separate numbered directions for this recipe.</p>}
+                {!stepCount && <p className="text-sm leading-6 text-forest/60">The source has ingredient notes but no separate numbered directions for this recipe.</p>}
               </section>
             </div>
           ) : (
