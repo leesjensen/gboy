@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { RecipeEditor, SignInPage } from './Admin.jsx'
+import { canEditRecipes, fetchCategories, fetchRecipe, fetchRecipeSummaries, isConfigured, supabase } from './supabase.js'
+import { Breadcrumbs, Icon } from './ui.jsx'
 
 const categoryDetails = {
   appetizers: {
@@ -39,31 +42,16 @@ const categoryDetails = {
   },
 }
 
-const categoryOrder = [
-  'appetizers', 'backpacking', 'belgian', 'breads', 'breakfast', 'desserts',
-  'drinks', 'entrees', 'salads', 'sauces', 'sides', 'soups',
-]
-
-const categoryById = Object.fromEntries(
-  Object.entries(categoryDetails).map(([id, details]) => [id, { id, ...details }]),
-)
+const defaultCategoryDetails = { icon: '✦', tint: 'sage', description: '' }
 
 function parseRoute() {
   const segments = window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean)
   if (segments[0] === 'category' && segments[1]) return { page: 'category', id: segments[1] }
+  if (segments[0] === 'recipe' && segments[1] && segments[2] === 'edit') return { page: 'edit', id: segments[1] }
   if (segments[0] === 'recipe' && segments[1]) return { page: 'recipe', id: segments[1] }
+  if (segments[0] === 'new') return { page: 'new', category: segments[1] }
+  if (segments[0] === 'admin') return { page: 'admin' }
   return { page: 'home' }
-}
-
-function Icon({ name, className = '' }) {
-  const shared = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', className, 'aria-hidden': true }
-  if (name === 'arrow') return <svg {...shared}><path d="M4.5 12h14M13 5.5l6.5 6.5-6.5 6.5" /></svg>
-  if (name === 'chevron') return <svg {...shared}><path d="m8 10 4 4 4-4" /></svg>
-  if (name === 'clock') return <svg {...shared}><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.2 2" /></svg>
-  if (name === 'book') return <svg {...shared}><path d="M5 4.5h11.5A2.5 2.5 0 0 1 19 7v12H7a2 2 0 0 1-2-2z" /><path d="M5 16.5A2.5 2.5 0 0 1 7.5 14H19M9 8h6m-6 3h6" /></svg>
-  if (name === 'leaf') return <svg {...shared}><path d="M19.5 4.5c-7 .2-12.7 2.4-13.7 7.2-.7 3.1 1.6 5.7 4.7 5.2 4.9-.8 7.5-6.1 9-12.4Z" /><path d="M4.5 20c2.8-4.5 6.4-7.5 11-10" /></svg>
-  if (name === 'spark') return <svg {...shared}><path d="m12 3 1.7 6.3L20 11l-6.3 1.7L12 19l-1.7-6.3L4 11l6.3-1.7L12 3Z" /><path d="m19 16 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z" /></svg>
-  return <svg {...shared}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="5.2" /><circle cx="12" cy="12" r="1.8" /></svg>
 }
 
 function Brand({ onClick }) {
@@ -80,7 +68,7 @@ function Brand({ onClick }) {
   )
 }
 
-function Header() {
+function Header({ canEdit }) {
   return (
     <header className="sticky top-0 z-30 border-b border-forest/8 bg-cream/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5 sm:px-8 lg:px-12">
@@ -88,7 +76,13 @@ function Header() {
         <nav className="flex items-center gap-3 sm:gap-7" aria-label="Main navigation">
           <a href="#/" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">Home</a>
           <a href="#/category/all" className="text-sm font-medium text-forest/70 transition hover:text-forest">Browse recipes</a>
-          <a href="#/category/desserts" className="hidden rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm ring-1 ring-forest/10 transition hover:bg-sage-pale sm:inline-flex">
+          {canEdit && (
+            <a href="#/new" className="inline-flex items-center gap-1.5 rounded-full bg-forest px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-light">
+              <Icon name="plus" className="size-4" /> <span className="hidden sm:inline">Add recipe</span>
+            </a>
+          )}
+          {canEdit && <a href="#/admin" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">Admin</a>}
+          <a href="#/category/desserts" className={`${canEdit ? 'lg:inline-flex' : 'sm:inline-flex'} hidden rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm ring-1 ring-forest/10 transition hover:bg-sage-pale`}>
             Something sweet <Icon name="arrow" className="ml-2 size-4" />
           </a>
         </nav>
@@ -129,12 +123,11 @@ function HeroArt() {
   )
 }
 
-function categoryRecipes(recipes) {
-  return categoryOrder.map((id) => {
-    const meta = categoryById[id]
-    const matching = recipes.filter((recipe) => recipe.category === id)
-    return { ...meta, name: matching[0]?.categoryName || meta.name, count: matching.length, recipes: matching }
-  }).filter((category) => category.count)
+function categoryRecipes(categories, recipes) {
+  return categories.map((category) => {
+    const matching = recipes.filter((recipe) => recipe.category === category.id)
+    return { ...defaultCategoryDetails, ...categoryDetails[category.id], ...category, count: matching.length, recipes: matching }
+  })
 }
 
 function SectionHeading({ eyebrow, title, description, action }) {
@@ -156,7 +149,7 @@ function CategoryCard({ category }) {
       <div className="absolute -right-6 -top-10 size-36 rounded-full border border-current/10 opacity-70 transition duration-500 group-hover:scale-110" />
       <div className="flex items-start justify-between">
         <span className="grid size-11 place-items-center rounded-2xl bg-white/70 font-serif text-2xl text-forest shadow-sm">{category.icon}</span>
-        <span className="rounded-full bg-white/60 px-3 py-1 text-xs font-semibold text-forest/65">{category.count} recipes</span>
+        <span className="rounded-full bg-white/60 px-3 py-1 text-xs font-semibold text-forest/65">{category.count} {category.count === 1 ? 'recipe' : 'recipes'}</span>
       </div>
       <div className="relative z-10 mt-7 flex items-end justify-between gap-3">
         <div>
@@ -193,7 +186,7 @@ function RecipeCard({ recipe }) {
       <div className="flex flex-1 flex-col px-1 pb-1 pt-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-coral">{recipe.subcategory || category?.name || recipe.categoryName}</span>
-          <span className="text-[0.68rem] text-forest/40">p. {recipe.sourcePage}</span>
+          {recipe.sourcePage && <span className="text-[0.68rem] text-forest/40">p. {recipe.sourcePage}</span>}
         </div>
         <h3 className="font-serif text-[1.16rem] font-semibold leading-snug text-forest transition group-hover:text-coral">{recipe.title}</h3>
         <div className="mt-auto flex items-center justify-between pt-4 text-xs text-forest/50">
@@ -209,7 +202,7 @@ function HomePage({ recipes, allCategories }) {
   const featured = useMemo(() => {
     const ids = ['warm-pizza-dip-from-good-housekeeping-jan-feb-2021-p-107', 'chicken-alfredo', 'easy-pumpkin-loaf', 'black-bean-soup']
     return ids.map((id) => recipes.find((recipe) => recipe.id === id)).filter(Boolean)
-  }, [])
+  }, [recipes])
 
   return (
     <main>
@@ -236,7 +229,7 @@ function HomePage({ recipes, allCategories }) {
               <span className="grid size-9 place-items-center rounded-full border-2 border-cream bg-gold-pale text-sm">✿</span>
               <span className="grid size-9 place-items-center rounded-full border-2 border-cream bg-sage-pale text-sm">✦</span>
             </div>
-            <p className="text-sm text-forest/55"><strong className="font-semibold text-forest">{recipes.length} recipes</strong> across {allCategories.length} cozy corners</p>
+            <p className="text-sm text-forest/55"><strong className="font-semibold text-forest">{recipes.length} recipes</strong> across {allCategories.filter((category) => category.count).length} cozy corners</p>
           </div>
         </div>
         <HeroArt />
@@ -246,7 +239,7 @@ function HomePage({ recipes, allCategories }) {
         <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-12">
           <SectionHeading eyebrow="Find your kind of good" title="What sounds good today?" description="Browse by craving, course, or the kind of day you're having." />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {allCategories.map((category) => <CategoryCard key={category.id} category={category} />)}
+            {allCategories.filter((category) => category.count).map((category) => <CategoryCard key={category.id} category={category} />)}
           </div>
         </div>
       </section>
@@ -281,11 +274,7 @@ function HomePage({ recipes, allCategories }) {
   )
 }
 
-function Breadcrumbs({ children }) {
-  return <nav aria-label="Breadcrumb" className="mb-7 flex flex-wrap items-center gap-2 text-xs font-medium text-forest/45"><a href="#/" className="transition hover:text-forest">Home</a><span>/</span>{children}</nav>
-}
-
-function CategoryPage({ categoryId, recipes, categoriesMap }) {
+function CategoryPage({ categoryId, recipes, categoriesMap, canEdit }) {
   const category = categoriesMap[categoryId]
   const [selectedSubcategory, setSelectedSubcategory] = useState('All')
   useEffect(() => setSelectedSubcategory('All'), [categoryId])
@@ -307,9 +296,16 @@ function CategoryPage({ categoryId, recipes, categoriesMap }) {
           <h1 className="font-serif text-4xl font-semibold tracking-tight text-forest sm:text-5xl">{title}</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-forest/60 sm:text-base">{description}</p>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-forest/8">
-          <span className="grid size-10 place-items-center rounded-xl bg-sage-pale text-forest"><Icon name="book" className="size-5" /></span>
-          <div><p className="font-serif text-xl font-semibold text-forest">{visible.length}</p><p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-forest/45">recipes to browse</p></div>
+        <div className="flex flex-wrap items-center gap-3">
+          {canEdit && (
+            <a href={categoryId === 'all' ? '#/new' : `#/new/${categoryId}`} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-forest shadow-sm ring-1 ring-forest/10 transition hover:bg-sage-pale">
+              <Icon name="plus" className="size-4" /> Add recipe
+            </a>
+          )}
+          <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-forest/8">
+            <span className="grid size-10 place-items-center rounded-xl bg-sage-pale text-forest"><Icon name="book" className="size-5" /></span>
+            <div><p className="font-serif text-xl font-semibold text-forest">{visible.length}</p><p className="text-[0.62rem] font-bold uppercase tracking-[0.14em] text-forest/45">recipes to browse</p></div>
+          </div>
         </div>
       </div>
       {subcategories.length > 0 && (
@@ -330,9 +326,9 @@ function metaLabel(text) {
   return text.replace(/\s+/g, ' ').replace(/\s*-\s*/g, ' · ').replace(/\s+--\s+/g, ' · ')
 }
 
-function RecipePage({ recipe, categoriesMap }) {
-  if (!recipe) return <NotFound />
+function RecipePage({ recipe, categoriesMap, canEdit }) {
   const category = categoriesMap[recipe.category]
+  const categoryName = category?.name || recipe.category
   const meta = recipe.blocks.filter((block) => block.type === 'meta')
   const bodyBlocks = recipe.blocks.filter((block) => block.type !== 'meta')
   const ingredients = bodyBlocks.filter((block) => block.type === 'ingredient')
@@ -343,15 +339,20 @@ function RecipePage({ recipe, categoriesMap }) {
 
   return (
     <main className="mx-auto min-h-[70vh] max-w-7xl px-5 pb-20 pt-8 sm:px-8 sm:pt-12 lg:px-12">
-      <Breadcrumbs><a href={`#/category/${recipe.category}`} className="transition hover:text-forest">{recipe.categoryName}</a><span>/</span><span className="max-w-[15rem] truncate text-forest">{recipe.title}</span></Breadcrumbs>
+      <Breadcrumbs><a href={`#/category/${recipe.category}`} className="transition hover:text-forest">{categoryName}</a><span>/</span><span className="max-w-[15rem] truncate text-forest">{recipe.title}</span></Breadcrumbs>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-12">
         <article>
           <div className="mb-6 flex flex-wrap items-center gap-2">
-            <a href={`#/category/${recipe.category}`} className={`category-pill tint-${category?.tint || 'sage'} rounded-full px-3.5 py-1.5 text-[0.67rem] font-bold uppercase tracking-[0.15em]`}>{recipe.categoryName}</a>
+            {canEdit && (
+              <a href={`#/recipe/${recipe.id}/edit`} className="order-last ml-auto inline-flex items-center gap-1.5 rounded-full bg-forest px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-forest-light">
+                <Icon name="edit" className="size-3.5" /> Edit
+              </a>
+            )}
+            <a href={`#/category/${recipe.category}`} className={`category-pill tint-${category?.tint || 'sage'} rounded-full px-3.5 py-1.5 text-[0.67rem] font-bold uppercase tracking-[0.15em]`}>{categoryName}</a>
             {recipe.subcategory && <span className="rounded-full bg-white px-3.5 py-1.5 text-[0.67rem] font-semibold text-forest/55 ring-1 ring-forest/8">{recipe.subcategory}</span>}
           </div>
           <h1 className="max-w-4xl font-serif text-4xl font-semibold leading-[1.08] tracking-tight text-forest sm:text-5xl lg:text-[3.55rem]">{recipe.title}</h1>
-          <p className="mt-4 flex items-center gap-2 text-sm text-forest/50"><Icon name="book" className="size-4" /> GBoy recipe collection <span className="text-forest/25">·</span> page {recipe.sourcePage}</p>
+          <p className="mt-4 flex items-center gap-2 text-sm text-forest/50"><Icon name="book" className="size-4" /> GBoy recipe collection{recipe.sourcePage && <><span className="text-forest/25">·</span> page {recipe.sourcePage}</>}</p>
           {meta.length > 0 && <div className="mt-6 flex flex-wrap gap-2">{meta.map((item, index) => <span key={index} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-forest/70 ring-1 ring-forest/8"><Icon name="clock" className="size-3.5 text-coral" />{metaLabel(item.text)}</span>)}</div>}
 
           <div className="my-8 overflow-hidden rounded-[1.8rem]">
@@ -397,16 +398,18 @@ function RecipePage({ recipe, categoriesMap }) {
               <pre className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap border-t border-forest/10 pt-4 font-sans text-xs leading-6 text-forest/60">{recipe.sourceText}</pre>
             </details>
           )}
-          <div className="mt-7 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gold-pale/65 px-4 py-4 text-xs text-forest/60 sm:px-5">
-            <span>From page {recipe.sourcePage} of the original collection</span>
-            <span className="font-semibold text-forest/65">Original collection, page {recipe.sourcePage}</span>
-          </div>
+          {recipe.sourcePage && (
+            <div className="mt-7 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gold-pale/65 px-4 py-4 text-xs text-forest/60 sm:px-5">
+              <span>From page {recipe.sourcePage} of the original collection</span>
+              <span className="font-semibold text-forest/65">Original collection, page {recipe.sourcePage}</span>
+            </div>
+          )}
         </article>
 
         <aside className="lg:pt-1">
           <div className="sticky top-24 rounded-[1.7rem] border border-forest/8 bg-white p-5 shadow-sm sm:p-6">
             <p className="mb-4 text-[0.66rem] font-bold uppercase tracking-[0.18em] text-coral">Keep browsing</p>
-            <h2 className="font-serif text-2xl font-semibold text-forest">More from {recipe.categoryName}</h2>
+            <h2 className="font-serif text-2xl font-semibold text-forest">More from {categoryName}</h2>
             <div className="mt-5 space-y-2">
               {(category?.recipes || []).filter((item) => item.id !== recipe.id).slice(0, 4).map((item) => (
                 <a key={item.id} href={`#/recipe/${item.id}`} className="group flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition hover:bg-cream">
@@ -432,25 +435,81 @@ function Footer() {
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-12">
         <Brand />
         <p className="text-xs leading-5 text-forest/45">A growing digital home for the recipes we return to.</p>
-        <span className="text-xs font-semibold text-forest/50">Made for the middle of the table.</span>
+        <div className="flex items-center gap-4 text-xs font-semibold text-forest/50">
+          <span>Made for the middle of the table.</span>
+          <a href="#/admin" className="text-forest/40 transition hover:text-forest">Admin</a>
+        </div>
       </div>
     </footer>
   )
 }
 
+function StatusMessage({ title, message, loading = false }) {
+  return (
+    <main className="mx-auto grid min-h-[65vh] max-w-xl place-items-center px-5 py-24 text-center">
+      <div>
+        {loading && <span className="mx-auto mb-5 grid size-12 animate-pulse place-items-center rounded-2xl bg-sage-pale text-forest"><Icon name="bowl" className="size-6" /></span>}
+        <h1 className="font-serif text-2xl font-semibold text-forest sm:text-3xl">{title}</h1>
+        {message && <p className="mt-3 text-sm text-forest/60">{message}</p>}
+      </div>
+    </main>
+  )
+}
+
+// Loads one full recipe; the summaries list only has titles and categories.
+function useRecipe(id, version) {
+  const [state, setState] = useState({ id: null, recipe: null, error: false })
+  useEffect(() => {
+    if (!id) return undefined
+    let cancelled = false
+    fetchRecipe(id)
+      .then((recipe) => !cancelled && setState({ id, recipe, error: false }))
+      .catch(() => !cancelled && setState({ id, recipe: null, error: true }))
+    return () => { cancelled = true }
+  }, [id, version])
+  return state.id === id ? state : { id, recipe: undefined, error: false }
+}
+
 export default function App() {
   const [route, setRoute] = useState(parseRoute)
-  const [recipes, setRecipes] = useState([])
+  const [categories, setCategories] = useState([])
+  const [recipes, setRecipes] = useState(null)
   const [loadError, setLoadError] = useState(false)
-  useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}recipes.json`)
-      .then((response) => {
-        if (!response.ok) throw new Error('Recipe collection could not be loaded')
-        return response.json()
+  const [session, setSession] = useState(null)
+  const [canEdit, setCanEdit] = useState(false)
+  const [recipeVersion, setRecipeVersion] = useState(0)
+
+  const loadCollection = useCallback(() => (
+    Promise.all([fetchCategories(), fetchRecipeSummaries()])
+      .then(([categoryRows, recipeRows]) => {
+        setCategories(categoryRows)
+        setRecipes(recipeRows)
       })
-      .then(setRecipes)
       .catch(() => setLoadError(true))
+  ), [])
+
+  useEffect(() => {
+    if (isConfigured) loadCollection()
+  }, [loadCollection])
+
+  useEffect(() => {
+    if (!isConfigured) return undefined
+    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession))
+    return () => data.subscription.unsubscribe()
   }, [])
+
+  const userId = session?.user?.id
+  useEffect(() => {
+    if (!userId) {
+      setCanEdit(false)
+      return undefined
+    }
+    let cancelled = false
+    canEditRecipes().then((allowed) => !cancelled && setCanEdit(allowed)).catch(() => !cancelled && setCanEdit(false))
+    return () => { cancelled = true }
+  }, [userId])
+
   useEffect(() => {
     const update = () => {
       setRoute(parseRoute())
@@ -460,16 +519,45 @@ export default function App() {
     return () => window.removeEventListener('hashchange', update)
   }, [])
 
-  const allCategories = useMemo(() => categoryRecipes(recipes), [recipes])
+  const allCategories = useMemo(() => categoryRecipes(categories, recipes || []), [categories, recipes])
   const categoriesMap = useMemo(() => Object.fromEntries(allCategories.map((category) => [category.id, category])), [allCategories])
+  const detailId = route.page === 'recipe' || route.page === 'edit' ? route.id : null
+  const detail = useRecipe(detailId, recipeVersion)
+
+  function handleSaved(saved) {
+    setRecipeVersion((version) => version + 1)
+    loadCollection()
+    window.location.hash = `#/recipe/${saved.id}`
+  }
+
+  function handleDeleted(deleted) {
+    loadCollection()
+    window.location.hash = `#/category/${deleted.category}`
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut()
+    window.location.hash = '#/'
+  }
 
   let content
-  if (loadError) content = <main className="mx-auto min-h-[65vh] max-w-xl px-5 py-24 text-center"><h1 className="font-serif text-3xl font-semibold text-forest">The recipe box is taking a moment.</h1><p className="mt-3 text-sm text-forest/60">Refresh the page to load the collection.</p></main>
-  else if (!recipes.length) content = <main className="mx-auto grid min-h-[65vh] max-w-xl place-items-center px-5 py-24 text-center"><div><span className="mx-auto mb-5 grid size-12 animate-pulse place-items-center rounded-2xl bg-sage-pale text-forest"><Icon name="bowl" className="size-6" /></span><p className="font-serif text-xl font-semibold text-forest">Opening the recipe box…</p></div></main>
+  if (!isConfigured) content = <StatusMessage title="The recipe box isn't connected yet." message="Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local (install/supabase/write_env_local.sh writes them), then restart the dev server." />
+  else if (loadError) content = <StatusMessage title="The recipe box is taking a moment." message="Refresh the page to load the collection." />
+  else if (route.page === 'admin') content = <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />
+  else if (!recipes) content = <StatusMessage title="Opening the recipe box…" loading />
   else if (route.page === 'home') content = <HomePage recipes={recipes} allCategories={allCategories} />
-  else if (route.page === 'category') content = <CategoryPage categoryId={route.id} recipes={recipes} categoriesMap={categoriesMap} />
-  else if (route.page === 'recipe') content = <RecipePage recipe={recipes.find((item) => item.id === route.id)} categoriesMap={categoriesMap} />
-  else content = <NotFound />
+  else if (route.page === 'category') content = <CategoryPage categoryId={route.id} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} />
+  else if ((route.page === 'new' || route.page === 'edit') && !canEdit) {
+    content = session
+      ? <StatusMessage title="This account can't edit recipes." message="Ask the site owner to make you an admin." />
+      : <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />
+  } else if (route.page === 'new') {
+    content = <RecipeEditor key="new" defaultCategory={categoriesMap[route.category] ? route.category : undefined} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />
+  } else if (detail.error) content = <StatusMessage title="That recipe didn't load." message="Refresh the page to try again." />
+  else if (detail.recipe === undefined) content = <StatusMessage title="Finding the recipe…" loading />
+  else if (!detail.recipe) content = <NotFound />
+  else if (route.page === 'edit') content = <RecipeEditor key={`${detail.recipe.id}-${recipeVersion}`} recipe={detail.recipe} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />
+  else content = <RecipePage recipe={detail.recipe} categoriesMap={categoriesMap} canEdit={canEdit} />
 
-  return <div className="min-h-screen bg-cream text-forest"><Header />{content}<Footer /></div>
+  return <div className="min-h-screen bg-cream text-forest"><Header canEdit={canEdit} />{content}<Footer /></div>
 }

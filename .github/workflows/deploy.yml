@@ -3,7 +3,7 @@ on:
   push:
     branches: ['main'] # Trigger the workflow on every push to the main branch
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 jobs:
@@ -19,14 +19,23 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      - name: set version
+        id: set_version
+        run: |
+          version=$(date +'%Y%m%d.%H%M%S')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Build
         run: npm run build # The built site `dist` directory
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
@@ -36,3 +45,13 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.set_version.outputs.version }}
+          SOURCE_SHA: ${{ github.event.head_commit.id }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          RELEASE_NOTES: 'Deployed to $PAGE_URL. Source: $SOURCE_SHA'
+        run: |
+          gh release create "version-$VERSION" --title "Version $VERSION" --notes "$RELEASE_NOTES" --target "$GITHUB_SHA" --latest --generate-notes

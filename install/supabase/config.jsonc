@@ -1,0 +1,61 @@
+{
+  "$schema": "https://supabase.com/schemas/config/v1.json",
+  // Supabase CLI config for the GBoy Recipe Book. The scripts run the CLI with
+  // `--workdir install`, so this folder is the project's supabase/ directory.
+  //
+  // Only the settings this project relies on are declared. `supabase config
+  // push` changes exactly these on the hosted project and leaves everything
+  // else alone; `supabase start` uses CLI defaults for the rest.
+  // Reference: https://supabase.com/docs/guides/local-development/cli/config
+  "project_id": "gboy",
+
+  "db": {
+    // Must match the hosted database (SHOW server_version;).
+    "major_version": 17,
+    "seed": {
+      "enabled": true,
+      // Generated from data/recipes.json by seed_recipes.sh (git-ignored).
+      "sql_paths": ["./seed.sql"]
+    }
+  },
+
+  "auth": {
+    // Set in install/supabase/.env.
+    "site_url": "env(SITE_URL)",
+    "additional_redirect_urls": ["http://localhost:5173/", "http://localhost:4173/"],
+    // Only admins created by add_admin.sh can sign in.
+    "enable_signup": false,
+
+    "email": {
+      "enabled": true,
+      "enable_confirmations": false,
+      "max_frequency": "60s",
+      // Admins sign in with the link in Supabase's default magic link email,
+      // which expires after 10 minutes.
+      "otp_length": 6,
+      "otp_expiry": 600
+
+      // The free plan only allows custom email templates with custom SMTP.
+      // To email a 6-digit code instead of a link, enable the smtp block below
+      // (set the SMTP_* values in install/supabase/.env) and add:
+      // ,"template": {
+      //   // signInWithOtp sends the magic link template; it shows {{ .Token }}.
+      //   "magic_link": {
+      //     "subject": "Your GBoy Recipe Book sign-in code",
+      //     "content_path": "./supabase/templates/magic_link.html"
+      //   }
+      // }
+
+      // Supabase's built-in mailer also only sends a few emails per hour.
+      // ,"smtp": {
+      //   "enabled": true,
+      //   "host": "env(SMTP_HOST)",
+      //   "port": 587,
+      //   "user": "env(SMTP_USER)",
+      //   "pass": "env(SMTP_PASS)",
+      //   "admin_email": "env(SMTP_ADMIN_EMAIL)",
+      //   "sender_name": "GBoy Recipe Book"
+      // }
+    }
+  }
+}

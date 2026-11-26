@@ -437,7 +437,7 @@ def main():
         recipe.pop("page", None)
         recipe.pop("index", None)
 
-    output = Path("public/recipes.json")
+    output = Path("data/recipes.json")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(recipes, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     totals = Counter(recipe["categoryName"] for recipe in recipes)
