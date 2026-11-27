@@ -14,6 +14,8 @@ export function Icon({ name, className = '' }) {
   if (name === 'up') return <svg {...shared}><path d="m7 14 5-5 5 5" /></svg>
   if (name === 'down') return <svg {...shared}><path d="m7 10 5 5 5-5" /></svg>
   if (name === 'close') return <svg {...shared}><path d="m6.5 6.5 11 11m0-11-11 11" /></svg>
+  if (name === 'download') return <svg {...shared}><path d="M12 4.5v10m-4-4 4 4 4-4" /><path d="M5 15.5v2A2 2 0 0 0 7 19.5h10a2 2 0 0 0 2-2v-2" /></svg>
+  if (name === 'cloud-off') return <svg {...shared}><path d="M8.5 6.6A5.5 5.5 0 0 1 17.3 10a3.8 3.8 0 0 1 2.4 6.3M15.5 18.5H7.2a4 4 0 0 1-1-7.9" /><path d="m4 4 16 16" /></svg>
   if (name === 'mail') return <svg {...shared}><rect x="3.5" y="5.5" width="17" height="13" rx="2" /><path d="m4.5 7 7.5 6 7.5-6" /></svg>
   return <svg {...shared}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="5.2" /><circle cx="12" cy="12" r="1.8" /></svg>
 }

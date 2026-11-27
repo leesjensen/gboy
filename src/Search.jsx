@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useOnlineStatus } from './offline.js'
 import { searchRecipes } from './supabase.js'
 import { Breadcrumbs, Icon } from './ui.jsx'
 
@@ -27,6 +28,7 @@ export function SearchPage({ initialQuery, categoriesMap }) {
   const [results, setResults] = useState(null)
   const [status, setStatus] = useState('idle')
   const latest = useRef(0)
+  const online = useOnlineStatus()
   const trimmed = query.trim()
 
   useEffect(() => {
@@ -73,8 +75,8 @@ export function SearchPage({ initialQuery, categoriesMap }) {
       <p className="mt-3 min-h-5 text-xs text-forest/50" aria-live="polite">
         {trimmed.length < minLength && 'Search titles, ingredients, and directions.'}
         {trimmed.length >= minLength && status === 'loading' && 'Searching…'}
-        {status === 'error' && 'Search is not available right now. Try again in a moment.'}
-        {status === 'done' && results && `${results.length === 50 ? 'Top 50' : results.length} ${results.length === 1 ? 'recipe' : 'recipes'} for “${trimmed}”`}
+        {status === 'error' && (online ? 'Search is not available right now. Try again in a moment.' : 'You’re offline. Download the recipes while connected to search them anywhere.')}
+        {status === 'done' && results && `${results.length === 50 ? 'Top 50' : results.length} ${results.length === 1 ? 'recipe' : 'recipes'} for “${trimmed}”${online ? '' : ' in your downloaded copy'}`}
       </p>
 
       {status === 'done' && results?.length === 0 && (

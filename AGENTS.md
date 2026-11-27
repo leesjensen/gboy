@@ -6,11 +6,13 @@ This is a recipe browser for GBoy, the Giant Book of Yum (`gboy.pdf`, 273 pages)
 
 ## Architecture
 
-- `src/App.jsx` implements the pages, data loading, and lightweight hash routing (`#/category/:id`, `#/recipe/:id`, `#/recipe/:id/edit`, `#/new[/:category]`, `#/admin`, `#/search/:query`).
+- `src/App.jsx` implements the pages, data loading, and lightweight hash routing (`#/category/:id`, `#/recipe/:id`, `#/recipe/:id/edit`, `#/new[/:category]`, `#/admin`, `#/search/:query`, `#/offline`).
 - `src/Import.jsx` (`#/import[/:category]`) sends a recipe photo to the `import-recipe` Edge Function in `install/supabase/functions/`, which calls Gemini (key in Supabase secrets) and returns a draft for the editor; it never writes to the database.
 - `src/Admin.jsx` has magic-link sign-in and the recipe editor; `src/supabase.js` has the client and all queries; `src/ui.jsx` has shared `Icon` and `Breadcrumbs`.
 - `src/main.jsx` mounts React; `src/index.css` contains the Tailwind theme and shared styles.
 - The app loads category and recipe summaries on start and each recipe's full text when it is opened. It needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (`.env.local` locally, repository variables in CI). Row-level security allows public reads and writes only for users with an `admin` grant in `public.roles`.
+- It is an installable PWA (`vite-plugin-pwa` in `vite.config.js`): the service worker precaches only the built app shell. Recipe data for offline reading is a separate, user-triggered download stored in IndexedDB by `src/offline.js`; `src/supabase.js` reads go network-first and fall back to that copy on network failure, and saves/deletes update it. `src/Offline.jsx` has the `#/offline` page (install and download), the offline banner and header link, and the once-a-day background refresh of an existing download. Editing, sign-in and photo import need a connection. The service worker only runs in `npm run build`/`npm run preview`, not `npm run dev`.
+- `public/logo.svg` is the source for the favicon and home-screen icons; `npm run icons` regenerates the PNGs in `public/` (`pwa-assets.config.js`).
 - `install/supabase/` is the Supabase CLI project (migrations, auth config, setup scripts); see its README.
 - `scripts/extract_pdf_lines.swift` uses macOS PDFKit; `scripts/build_recipe_data.py` builds the JSON dataset. `README.md` has the refresh commands.
 
@@ -21,7 +23,8 @@ Keep Vite's relative `base: './'` and hash navigation for eventual GitHub Pages 
 - `npm ci` installs lockfile dependencies.
 - `npm run dev` starts Vite locally.
 - `npm run build` writes the static site to `dist/`.
-- `npm run preview` serves the production build locally.
+- `npm run preview` serves the production build locally (use it to test install and offline behavior).
+- `npm run icons` regenerates the app icons from `public/logo.svg`.
 
 ## Recipe Data and Review
 

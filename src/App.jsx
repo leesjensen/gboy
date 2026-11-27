@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RecipeEditor, SignInPage } from './Admin.jsx';
 import { ImportPage } from './Import.jsx';
+import { OfflineBanner, OfflineHeaderLink, OfflinePage, useOfflineAutoRefresh } from './Offline.jsx';
+import { useOfflineMeta, useOnlineStatus } from './offline.js';
 import { SearchPage, searchHref } from './Search.jsx';
 import { canEditRecipes, fetchCategories, fetchRecipe, fetchRecipeSummaries, isConfigured, supabase } from './supabase.js';
 import { Breadcrumbs, Icon } from './ui.jsx';
@@ -78,6 +80,7 @@ function parseRoute() {
   if (segments[0] === 'new') return { page: 'new', category: segments[1] };
   if (segments[0] === 'import') return { page: 'import', category: segments[1] };
   if (segments[0] === 'admin') return { page: 'admin' };
+  if (segments[0] === 'offline') return { page: 'offline' };
   if (segments[0] === 'search') {
     try {
       return { page: 'search', query: decodeURIComponent(segments.slice(1).join('/')) };
@@ -130,6 +133,7 @@ function Header({ canEdit, page }) {
           <a href="#/search" aria-label="Search recipes" className="grid size-9 place-items-center rounded-full text-forest/70 transition hover:bg-white hover:text-forest md:hidden">
             <Icon name="search" className="size-5" />
           </a>
+          <OfflineHeaderLink />
           <a href="#/category/all" className="text-sm font-medium text-forest/70 transition hover:text-forest">
             Browse recipes
           </a>
@@ -633,6 +637,9 @@ function Footer() {
         <p className="text-xs leading-5 text-forest/45">The Giant Book of Yum, compiled by Lisa Jensen and shared with her children, with love.</p>
         <div className="flex items-center gap-4 text-xs font-semibold text-forest/50">
           <span>Made for the middle of the table.</span>
+          <a href="#/offline" className="text-forest/40 transition hover:text-forest">
+            Use offline
+          </a>
           <a href="#/admin" className="text-forest/40 transition hover:text-forest">
             Admin
           </a>
@@ -653,6 +660,20 @@ function StatusMessage({ title, message, loading = false }) {
         )}
         <h1 className="font-serif text-2xl font-semibold text-forest sm:text-3xl">{title}</h1>
         {message && <p className="mt-3 text-sm text-forest/60">{message}</p>}
+      </div>
+    </main>
+  );
+}
+
+function OfflineEmpty() {
+  return (
+    <main className="mx-auto grid min-h-[65vh] max-w-xl place-items-center px-5 py-24 text-center">
+      <div>
+        <span className="mx-auto mb-5 grid size-12 place-items-center rounded-2xl bg-gold-pale text-forest">
+          <Icon name="cloud-off" className="size-6" />
+        </span>
+        <h1 className="font-serif text-2xl font-semibold text-forest sm:text-3xl">You’re offline.</h1>
+        <p className="mt-3 text-sm leading-6 text-forest/60">The recipes haven’t been downloaded to this device yet. Next time you’re connected, open <a href="#/offline" className="font-semibold text-coral">Use offline</a> and download them to read GBoy anywhere.</p>
       </div>
     </main>
   );
@@ -682,6 +703,9 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [canEdit, setCanEdit] = useState(false);
   const [recipeVersion, setRecipeVersion] = useState(0);
+  const online = useOnlineStatus();
+  const offlineCopy = useOfflineMeta();
+  useOfflineAutoRefresh();
 
   const loadCollection = useCallback(
     () =>
@@ -689,6 +713,7 @@ export default function App() {
         .then(([categoryRows, recipeRows]) => {
           setCategories(categoryRows);
           setRecipes(recipeRows);
+          setLoadError(false);
         })
         .catch(() => setLoadError(true)),
     [],
@@ -697,6 +722,12 @@ export default function App() {
   useEffect(() => {
     if (isConfigured) loadCollection();
   }, [loadCollection]);
+
+  // Retry once a connection returns, or once a download lands while offline.
+  const hasOfflineCopy = Boolean(offlineCopy.meta);
+  useEffect(() => {
+    if (isConfigured && loadError && (online || hasOfflineCopy)) loadCollection();
+  }, [online, hasOfflineCopy, loadError, loadCollection]);
 
   useEffect(() => {
     if (!isConfigured) return undefined;
@@ -752,19 +783,24 @@ export default function App() {
 
   let content;
   if (!isConfigured) content = <StatusMessage title="The recipe box isn't connected yet." message="Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local (install/supabase/write_env_local.sh writes them), then restart the dev server." />;
+  else if (route.page === 'offline') content = <OfflinePage totalRecipes={recipes?.length} />;
+  else if (route.page === 'admin' && !online && !session) content = <StatusMessage title="Signing in needs a connection." message="You can still browse any recipes you’ve downloaded." />;
+  else if (loadError && !online) content = <OfflineEmpty />;
   else if (loadError) content = <StatusMessage title="The recipe box is taking a moment." message="Refresh the page to load the collection." />;
   else if (route.page === 'admin') content = <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
   else if (!recipes) content = <StatusMessage title="Opening the recipe box…" loading />;
   else if (route.page === 'search') content = <SearchPage key={route.query} initialQuery={route.query} categoriesMap={categoriesMap} />;
   else if (route.page === 'home') content = <HomePage recipes={recipes} allCategories={allCategories} />;
   else if (route.page === 'category') content = <CategoryPage categoryId={route.id} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} />;
+  else if (['new', 'edit', 'import'].includes(route.page) && !online) content = <StatusMessage title="Editing needs a connection." message="Recipes you’ve downloaded are still here to read." />;
   else if (['new', 'edit', 'import'].includes(route.page) && !canEdit) {
     content = session ? <StatusMessage title="This account can't edit recipes." message="Ask the site owner to make you an admin." /> : <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
   } else if (route.page === 'new') {
     content = <RecipeEditor key="new" defaultCategory={categoriesMap[route.category] ? route.category : undefined} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />;
   } else if (route.page === 'import') {
     content = <ImportPage key={`import-${route.category || ''}`} defaultCategory={categoriesMap[route.category] ? route.category : ''} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />;
-  } else if (detail.error) content = <StatusMessage title="That recipe didn't load." message="Refresh the page to try again." />;
+  } else if (detail.error && !online) content = <StatusMessage title="This recipe isn’t on this device." message={offlineCopy.meta ? 'It was added after your last download. Connect to see it.' : 'Download the recipes while you’re connected to read them offline.'} />;
+  else if (detail.error) content = <StatusMessage title="That recipe didn't load." message="Refresh the page to try again." />;
   else if (detail.recipe === undefined) content = <StatusMessage title="Finding the recipe…" loading />;
   else if (!detail.recipe) content = <NotFound />;
   else if (route.page === 'edit') content = <RecipeEditor key={`${detail.recipe.id}-${recipeVersion}`} recipe={detail.recipe} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />;
@@ -773,6 +809,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-cream text-forest">
       <Header canEdit={canEdit} page={route.page} />
+      <OfflineBanner />
       {content}
       <Footer />
     </div>

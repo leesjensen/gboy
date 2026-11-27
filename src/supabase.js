@@ -1,4 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
+import {
+  deleteOfflineRecipe, getOfflineCategories, getOfflineMeta, getOfflineRecipe, getOfflineRecipes, isNetworkError,
+  putOfflineRecipe, saveOfflineCollection, searchOffline,
+} from './offline.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -20,23 +24,78 @@ function check({ data, error }) {
   return data
 }
 
+// How long a read may take before falling back to the downloaded copy.
+const offlineFallbackMs = 8000
+const asIs = (builder) => builder
+
+// Reads go to the downloaded copy (src/offline.js) right away when the browser
+// reports it is offline; otherwise they try the network first and fall back
+// to the copy if the request fails. With a copy to fall back on, requests
+// skip supabase-js's automatic retries (about 7 seconds of backoff on a
+// network failure) and give up after offlineFallbackMs. `online(tune)` must
+// pass each query builder through `tune`.
+async function withOfflineFallback(online, offline) {
+  const hasCopy = Boolean(await getOfflineMeta().catch(() => null))
+  if (hasCopy && navigator.onLine === false) {
+    const local = await offline().catch(() => null)
+    if (local != null) return local
+  }
+  const tune = hasCopy ? (builder) => builder.retry(false).abortSignal(AbortSignal.timeout(offlineFallbackMs)) : asIs
+  try {
+    return await online(tune)
+  } catch (error) {
+    if (!isNetworkError(error)) throw error
+    const local = await offline().catch(() => null)
+    if (local == null) throw error
+    return local
+  }
+}
+
+function toSummary({ id, title, category, subcategory, sourcePage }) {
+  return { id, title, category, subcategory, sourcePage }
+}
+
+async function fetchAllPages(columns, { size = pageSize, onPage, tune = asIs } = {}) {
+  const rows = []
+  for (let from = 0; ; from += size) {
+    const { data, error, count } = await tune(supabase.from('recipes').select(columns, { count: from ? undefined : 'exact' })
+      .order('title').order('id').range(from, from + size - 1))
+    if (error) throw error
+    rows.push(...data)
+    onPage?.(rows.length, count)
+    if (data.length < size) return rows
+  }
+}
+
 export async function fetchCategories() {
-  return check(await supabase.from('categories').select('id, name, sortOrder:sort_order').order('sort_order'))
+  return withOfflineFallback(
+    async (tune) => check(await tune(supabase.from('categories').select('id, name, sortOrder:sort_order').order('sort_order'))),
+    getOfflineCategories,
+  )
 }
 
 // Every recipe without its body, for the home page, category lists and counts.
 export async function fetchRecipeSummaries() {
-  const rows = []
-  for (let from = 0; ; from += pageSize) {
-    const page = check(await supabase.from('recipes').select(summaryColumns)
-      .order('title').order('id').range(from, from + pageSize - 1))
-    rows.push(...page)
-    if (page.length < pageSize) return rows
-  }
+  return withOfflineFallback(
+    (tune) => fetchAllPages(summaryColumns, { tune }),
+    async () => (await getOfflineRecipes())?.map(toSummary) ?? null,
+  )
 }
 
 export async function fetchRecipe(id) {
-  return check(await supabase.from('recipes').select(detailColumns).eq('id', id).maybeSingle())
+  return withOfflineFallback(
+    async (tune) => check(await tune(supabase.from('recipes').select(detailColumns).eq('id', id).maybeSingle())),
+    () => getOfflineRecipe(id),
+  )
+}
+
+// Downloads every category and full recipe for offline reading.
+// onProgress(done, total) reports recipes received so far.
+export async function downloadForOffline(onProgress) {
+  const categories = check(await supabase.from('categories').select('id, name, sortOrder:sort_order').order('sort_order'))
+  const recipes = await fetchAllPages(detailColumns, { size: 200, onPage: onProgress })
+  await saveOfflineCollection(categories, recipes)
+  return recipes.length
 }
 
 function toRow(recipe) {
@@ -52,6 +111,7 @@ function toRow(recipe) {
 }
 
 function friendlyError(error) {
+  if (isNetworkError(error)) return new Error("You're offline. Editing needs a connection.")
   if (error?.code === '23505') return new Error('A recipe with that ID already exists. Choose a different ID.')
   if (error?.code === '42501') return new Error('Your account is not allowed to make this change.')
   return error
@@ -61,6 +121,7 @@ export async function createRecipe(recipe) {
   const { data, error } = await supabase.from('recipes')
     .insert({ id: recipe.id, ...toRow(recipe), source_text: recipe.sourceText || '' }).select(detailColumns).single()
   if (error) throw friendlyError(error)
+  await putOfflineRecipe(data).catch(() => {})
   return data
 }
 
@@ -70,6 +131,7 @@ export async function updateRecipe(recipe) {
     .update(toRow(recipe)).eq('id', recipe.id).select(detailColumns)
   if (error) throw friendlyError(error)
   if (!data.length) throw new Error('Your account is not allowed to edit this recipe.')
+  await putOfflineRecipe(data[0]).catch(() => {})
   return data[0]
 }
 
@@ -77,6 +139,7 @@ export async function deleteRecipe(id) {
   const { data, error } = await supabase.from('recipes').delete().eq('id', id).select('id')
   if (error) throw friendlyError(error)
   if (!data.length) throw new Error('Your account is not allowed to delete this recipe.')
+  await deleteOfflineRecipe(id).catch(() => {})
 }
 
 export async function canEditRecipes() {
@@ -93,15 +156,17 @@ export async function sendSignInLink(email) {
 
 // Ranked full-text search (install/supabase/migrations/*_search_recipes.sql).
 export async function searchRecipes(query, limit = 50) {
-  const rows = check(await supabase.rpc('search_recipes', { p_query: query, p_limit: limit }))
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    category: row.category_id,
-    subcategory: row.subcategory,
-    sourcePage: row.source_page,
-    match: row.match,
-  }))
+  return withOfflineFallback(async (tune) => {
+    const rows = check(await tune(supabase.rpc('search_recipes', { p_query: query, p_limit: limit })))
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      category: row.category_id,
+      subcategory: row.subcategory,
+      sourcePage: row.source_page,
+      match: row.match,
+    }))
+  }, async () => ((await getOfflineRecipes()) ? searchOffline(query, limit) : null))
 }
 
 // Sends a photo to the import-recipe Edge Function, which reads it with Gemini

@@ -4,6 +4,8 @@ GBoy, the Giant Book of Yum, is a recipe collection compiled by Lisa Jensen from
 
 This is a recipe browser built with Vite, React, and Tailwind CSS. Recipes live in a hosted [Supabase](https://supabase.com) Postgres database that the browser reads directly, so the site still deploys as static files. Anyone can browse and search titles, ingredients, and directions; admins sign in with an emailed link to add, edit, and delete recipes. Hash-based navigation keeps pages compatible with GitHub Pages hosting.
 
+GBoy is also an installable web app. Open **Use offline** (the download icon in the header, or the footer link) to add it to your home screen and to download every recipe to the device for reading and searching without a connection. A downloaded copy refreshes itself about once a day when you're online.
+
 ## Run locally
 
 ```sh
@@ -12,7 +14,7 @@ install/supabase/write_env_local.sh   # writes VITE_SUPABASE_URL and VITE_SUPABA
 npm run dev
 ```
 
-See `install/supabase/README.md` to create the database and add admins. Vite prints the local address. Create a production build with `npm run build`; preview that build with `npm run preview`.
+See `install/supabase/README.md` to create the database and add admins. Vite prints the local address. Create a production build with `npm run build`; preview that build with `npm run preview`. The service worker (install and offline app shell) only runs in the built site, so test PWA behavior with `npm run preview`, using DevTools > Application and the Network panel's Offline setting.
 
 ## Browse and update recipes
 
@@ -33,7 +35,9 @@ Review the affected recipe titles and text after regeneration, especially entrie
 - `src/Admin.jsx` contains admin sign-in and the recipe editor.
 - `src/Search.jsx` contains the search page.
 - `src/Import.jsx` contains "Add from a photo", which sends a photo to the `import-recipe` Edge Function (Gemini) and opens the result as a draft.
-- `src/supabase.js` creates the Supabase client and holds every query.
+- `src/supabase.js` creates the Supabase client and holds every query; reads fall back to the downloaded copy when offline.
+- `src/offline.js` stores the downloaded recipes in IndexedDB and provides offline search, online status, and the install prompt; `src/Offline.jsx` has the "Use offline" page, offline banner, and background refresh.
+- `public/` holds `logo.svg` and the generated app icons (`npm run icons`).
 - `src/ui.jsx` has shared icons and breadcrumbs.
 - `src/index.css` defines the Tailwind theme and global styles.
 - `data/recipes.json` is the extracted dataset used to seed the database. It is not shipped with the site.
