@@ -71,6 +71,23 @@ button {
   background-image: radial-gradient(circle at 80% 15%, rgba(255, 255, 255, 0.62), transparent 32%), linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 58%);
 }
 
+/* Recipe photo import: a soft line sweeping over the photo while it's read. */
+.photo-scan::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 22%;
+  background: linear-gradient(to bottom, transparent, rgba(196, 151, 71, 0.38) 70%, rgba(196, 151, 71, 0.85));
+  box-shadow: 0 6px 18px rgba(196, 151, 71, 0.35);
+  animation: photo-scan 2.6s ease-in-out infinite alternate;
+}
+
+@keyframes photo-scan {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(455%); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
