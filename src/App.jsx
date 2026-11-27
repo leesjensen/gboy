@@ -126,9 +126,6 @@ function Header({ canEdit, page }) {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5 sm:px-8 lg:px-12">
         <Brand />
         <nav className="flex items-center gap-3 sm:gap-7" aria-label="Main navigation">
-          <a href="#/" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">
-            Home
-          </a>
           {page !== 'search' && <HeaderSearch />}
           <a href="#/search" aria-label="Search recipes" className="grid size-9 place-items-center rounded-full text-forest/70 transition hover:bg-white hover:text-forest md:hidden">
             <Icon name="search" className="size-5" />
