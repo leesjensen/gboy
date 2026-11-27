@@ -174,9 +174,9 @@ export async function canEditRecipes() {
 }
 
 // Anyone can sign in (to rate recipes); new accounts confirm their email
-// first. The email link returns to the site root, so a "Sign in" link
-// remembers the page it was tapped on (rememberSignInReturn) and the app goes
-// back there after sign-in (takeSignInReturn).
+// first. Sign-in happens on #/account, so a "Sign in" link remembers the page
+// it was tapped on (rememberSignInReturn) and the app goes back there after
+// sign-in (takeSignInReturn).
 const returnKey = 'gboy-sign-in-return'
 const returnMaxAgeMs = 60 * 60 * 1000
 
@@ -196,11 +196,17 @@ export function takeSignInReturn() {
   }
 }
 
-export async function sendSignInLink(email) {
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + window.location.pathname },
-  })
+// Emails a 6-digit sign-in code (install/supabase/templates). New addresses
+// get the confirmation email, which carries a code too.
+export async function sendSignInCode(email) {
+  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
+  if (error) throw error
+}
+
+// Signs in with the emailed code; the session arrives through
+// onAuthStateChange like any other sign-in.
+export async function verifySignInCode(email, code) {
+  const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
   if (error) throw error
 }
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { createRecipe, deleteMyAccount, deleteRecipe, sendSignInLink, updateRecipe } from './supabase.js'
+import { createRecipe, deleteMyAccount, deleteRecipe, sendSignInCode, updateRecipe, verifySignInCode } from './supabase.js'
 import { Breadcrumbs, Icon } from './ui.jsx'
 
 const blockTypes = [
@@ -43,6 +43,7 @@ export function SignInPage({ session, canEdit, onSignOut }) {
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [code, setCode] = useState('')
 
   async function removeAccount() {
     setStatus('deleting')
@@ -94,43 +95,89 @@ export function SignInPage({ session, canEdit, onSignOut }) {
     )
   }
 
-  async function submit(event) {
-    event.preventDefault()
-    setStatus('sending')
+  function friendlySendError(err) {
+    return /rate limit|too many|seconds/i.test(err.message)
+      ? 'Too many codes have been sent recently. Wait a minute and try again.'
+      : err.message || 'The sign-in code could not be sent.'
+  }
+
+  // `resend` keeps the code form showing while a new code is sent.
+  async function sendCode(event, resend = false) {
+    event?.preventDefault()
+    setStatus(resend ? 'resending' : 'sending')
     setError('')
     try {
-      await sendSignInLink(email.trim())
+      await sendSignInCode(email.trim())
+      setCode('')
       setStatus('sent')
     } catch (err) {
-      setStatus('idle')
-      setError(/rate limit|too many/i.test(err.message)
-        ? 'Too many sign-in emails have been sent recently. Try again in a little while.'
-        : err.message || 'The sign-in email could not be sent.')
+      setStatus(resend ? 'sent' : 'idle')
+      setError(friendlySendError(err))
+    }
+  }
+
+  async function verify(event) {
+    event.preventDefault()
+    setStatus('verifying')
+    setError('')
+    try {
+      await verifySignInCode(email.trim(), code)
+      // The session update re-renders this page as signed in.
+    } catch (err) {
+      setStatus('sent')
+      setError(/expired|invalid|token/i.test(err.message)
+        ? 'That code didn’t work. Check it, or send a new one.'
+        : err.message || 'That code could not be checked. Try again in a moment.')
     }
   }
 
   return (
     <AdminShell crumb={<span className="text-forest">Sign in</span>} eyebrow="Your account" title="Sign in to rate recipes">
       <div className="rounded-[1.65rem] bg-white p-6 shadow-sm ring-1 ring-forest/8 sm:p-8">
-        {status === 'sent' ? (
-          <div className="flex gap-4">
-            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-sage-pale text-forest"><Icon name="mail" className="size-5" /></span>
-            <div>
-              <h2 className="font-serif text-2xl font-semibold text-forest">Check your email</h2>
-              <p className="mt-2 text-sm leading-6 text-forest/65">We sent a link to <strong className="font-semibold text-forest">{email}</strong>. Open it in this browser to sign in. The first time, the email asks you to confirm your address.</p>
-              <button type="button" onClick={() => setStatus('idle')} className="mt-4 text-sm font-semibold text-coral">Use a different email</button>
+        {status === 'sent' || status === 'verifying' || status === 'resending' ? (
+          <form onSubmit={verify} className="space-y-5">
+            <div className="flex gap-4">
+              <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-sage-pale text-forest"><Icon name="mail" className="size-5" /></span>
+              <div>
+                <h2 className="font-serif text-2xl font-semibold text-forest">Check your email</h2>
+                <p className="mt-2 text-sm leading-6 text-forest/65">We sent a 6-digit code to <strong className="font-semibold text-forest">{email}</strong>. Enter it here. It expires in 10 minutes.</p>
+              </div>
             </div>
-          </div>
+            <div>
+              <label htmlFor="code" className={labelClass}>Code</label>
+              <input
+                id="code"
+                required
+                autoFocus
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                className={`${inputClass} max-w-48 text-center font-mono text-2xl tracking-[0.4em]`}
+                placeholder="••••••"
+              />
+            </div>
+            <ErrorNote message={error} />
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="submit" disabled={code.length !== 6 || status === 'verifying'} className={primaryButton}>
+                {status === 'verifying' ? 'Signing in…' : 'Sign in'}
+              </button>
+              <button type="button" onClick={() => sendCode(null, true)} disabled={status !== 'sent'} className={quietButton}>{status === 'resending' ? 'Sending…' : 'Send a new code'}</button>
+              <button type="button" onClick={() => { setStatus('idle'); setError(''); setCode('') }} className="text-sm font-semibold text-coral">Use a different email</button>
+            </div>
+          </form>
         ) : (
-          <form onSubmit={submit} className="space-y-5">
-            <p className="text-sm leading-6 text-forest/65">Sign in with your email to rate recipes. There’s no password: we email you a one-time link. Browsing and searching never need an account.</p>
+          <form onSubmit={sendCode} className="space-y-5">
+            <p className="text-sm leading-6 text-forest/65">Sign in with your email to rate recipes. There’s no password: we email you a 6-digit code. Browsing and searching never need an account.</p>
             <div>
               <label htmlFor="email" className={labelClass}>Email</label>
               <input id="email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass} placeholder="you@example.com" />
             </div>
             <ErrorNote message={error} />
             <button type="submit" disabled={status === 'sending'} className={primaryButton}>
-              {status === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
+              {status === 'sending' ? 'Sending…' : 'Email me a code'}
             </button>
           </form>
         )}

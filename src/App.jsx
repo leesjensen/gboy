@@ -895,7 +895,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
-      // Back to the page where "Sign in" was tapped (the email link lands on the home page).
+      // Back to the page where "Sign in" was tapped.
       if (event === 'SIGNED_IN') {
         const target = takeSignInReturn();
         if (target) setTimeout(() => (window.location.hash = target), 0);

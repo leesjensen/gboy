@@ -1,6 +1,6 @@
 # Supabase setup
 
-This folder is a [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) project. It moves the recipe collection from `data/recipes.json` into Postgres. Anyone can read recipes. Anyone can sign in with an emailed one-time link to rate recipes; admins use the same sign-in to create, update, and delete them in the app.
+This folder is a [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) project. It moves the recipe collection from `data/recipes.json` into Postgres. Anyone can read recipes. Anyone can sign in with a 6-digit code sent by email to rate recipes; admins use the same sign-in to create, update, and delete them in the app.
 
 The scripts run the CLI with `--workdir install`, so `install/supabase/` acts as the project's `supabase/` folder. To run CLI commands yourself, use `supabase --workdir install <command>`.
 
@@ -39,9 +39,9 @@ This starts Supabase in Docker and runs `db reset` to rebuild the database from 
 
 | Path | Purpose |
 | --- | --- |
-| `config.jsonc` | Declares only the settings this project relies on: the seed path, site and redirect URLs, sign-ups on with email confirmation (so anyone can sign in to rate, but not with a made-up address), email sign-in (links expire after 10 minutes). `config push` changes just these on the hosted project. Commented `smtp` and email template blocks are ready for a real mail server |
+| `config.jsonc` | Declares only the settings this project relies on: the seed path, site and redirect URLs, sign-ups on with email confirmation (so anyone can sign in to rate, but not with a made-up address), email sign-in with 6-digit codes that expire after 10 minutes, the code email templates, Amazon SES as the mail server, and an hourly email limit. `config push` changes just these on the hosted project |
 | `migrations/` | Schema (`categories`, `recipes`, `roles`, audit triggers, full-text `search` column), the ranked `search_recipes` function, public read RLS, and role-based write RLS |
-| `templates/magic_link.html` | A sign-in email that shows a 6-digit code (`{{ .Token }}`). Unused until custom SMTP is set up, because the free plan doesn't allow custom templates with the built-in mailer |
+| `templates/magic_link.html`, `templates/confirmation.html` | The sign-in email for existing accounts and the confirm-your-email message for new ones. Both show the 6-digit code (`{{ .Token }}`). Custom templates need custom SMTP |
 | `seed_recipes.sh [--local] [--force] [--prune]` | Generates `seed.sql` from `data/recipes.json` and loads it. By default only new IDs are inserted, so database edits are kept. `--force` overwrites existing rows with the JSON. `--prune` deletes recipes the JSON no longer has, except ones created or saved in the app |
 | `add_admin.sh [--local] [--remove] email ['*'\|'recipe/*']` | Creates the auth user if needed and grants (or removes) `admin` on `*` (default) or `recipe/*`. `--list` shows all grants |
 | `write_env_local.sh [--local]` | Writes the app's `.env.local` for the hosted or local API |
@@ -50,7 +50,7 @@ Scripts target the linked hosted project unless the first argument is `--local`.
 
 To change the schema, add a migration with `supabase --workdir install migration new <name>`, test it with `local.sh`, and then run `supabase --workdir install db push`.
 
-Supabase's built-in mailer only sends a few emails per hour, shared by everyone signing in, so admins can be locked out of sign-in while it's used up. Now that anyone can sign in to rate, enable the `smtp` block in `config.jsonc` and run `config push` before sharing the site widely.
+Sign-in email goes through Amazon SES (an authenticated Mail Manager ingress endpoint). The `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` and `SMTP_ADMIN_EMAIL` values live in `install/supabase/.env`, and `config.jsonc` reads them with `env()`. Fill them in before `config push`, because empty values fail. The sender address must be on a domain verified in SES. `auth.rate_limit.email_sent` caps sign-in emails for the whole site at 100 an hour.
 
 ## Recipe photo import
 
@@ -83,6 +83,6 @@ Ratings live in `ratings`: one 1–5 rating per user per recipe, primary key `(r
 
 ## Using it from the app
 
-`src/supabase.js` creates the client from `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` and holds every query. The app loads categories and recipe summaries (no recipe text) on start, paging past PostgREST's 1,000-row limit, and fetches each recipe's full text when it is opened. People sign in at `#/account` with `signInWithOtp` (PKCE flow, so the link returns with `?code=` and leaves the `#/` routes alone). The link must return to `SITE_URL` or one of `additional_redirect_urls`. The app calls `has_role('admin', 'recipe/*')` to decide whether to show the editing controls; RLS enforces the same rule on every write.
+`src/supabase.js` creates the client from `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` and holds every query. The app loads categories and recipe summaries (no recipe text) on start, paging past PostgREST's 1,000-row limit, and fetches each recipe's full text when it is opened. People sign in at `#/account`: `signInWithOtp` emails a 6-digit code, and `verifyOtp` (type `email`) checks it, so nobody leaves the page or the installed app. The app calls `has_role('admin', 'recipe/*')` to decide whether to show the editing controls; RLS enforces the same rule on every write.
 
 For GitHub Pages builds, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as repository variables; `.github/workflows/deploy.yml` passes them to the build. The anon key is meant to be public, and RLS protects the data.

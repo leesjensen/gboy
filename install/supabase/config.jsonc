@@ -27,38 +27,48 @@
     // rights; editing still requires an admin grant (add_admin.sh).
     "enable_signup": true,
 
+    "rate_limit": {
+      // Sign-in emails per hour across the whole site (Supabase's default is
+      // 30 once custom SMTP is on).
+      "email_sent": 100
+    },
+
     "email": {
       "enabled": true,
       // Accounts must confirm their email before signing in, so ratings can't
       // be stuffed with made-up addresses through password sign-up.
       "enable_confirmations": true,
       "max_frequency": "60s",
-      // Admins sign in with the link in Supabase's default magic link email,
-      // which expires after 10 minutes.
+      // People sign in with a 6-digit code (templates below) that expires
+      // after 10 minutes. Codes need custom SMTP: the built-in mailer doesn't
+      // allow custom templates.
       "otp_length": 6,
-      "otp_expiry": 600
+      "otp_expiry": 600,
 
-      // The free plan only allows custom email templates with custom SMTP.
-      // To email a 6-digit code instead of a link, enable the smtp block below
-      // (set the SMTP_* values in install/supabase/.env) and add:
-      // ,"template": {
-      //   // signInWithOtp sends the magic link template; it shows {{ .Token }}.
-      //   "magic_link": {
-      //     "subject": "Your Giant Book of Yum sign-in code",
-      //     "content_path": "./supabase/templates/magic_link.html"
-      //   }
-      // }
+      // signInWithOtp sends the magic link template to existing users and the
+      // confirmation template to new ones; both show the code ({{ .Token }}).
+      "template": {
+        "magic_link": {
+          "subject": "Your Giant Book of Yum sign-in code",
+          "content_path": "./supabase/templates/magic_link.html"
+        },
+        "confirmation": {
+          "subject": "Confirm your email for the Giant Book of Yum",
+          "content_path": "./supabase/templates/confirmation.html"
+        }
+      },
 
-      // Supabase's built-in mailer also only sends a few emails per hour.
-      // ,"smtp": {
-      //   "enabled": true,
-      //   "host": "env(SMTP_HOST)",
-      //   "port": 587,
-      //   "user": "env(SMTP_USER)",
-      //   "pass": "env(SMTP_PASS)",
-      //   "admin_email": "env(SMTP_ADMIN_EMAIL)",
-      //   "sender_name": "Giant Book of Yum"
-      // }
+      // Amazon SES (Mail Manager authenticated ingress endpoint). Values live
+      // in install/supabase/.env, which is git-ignored.
+      "smtp": {
+        "enabled": true,
+        "host": "env(SMTP_HOST)",
+        "port": 587,
+        "user": "env(SMTP_USER)",
+        "pass": "env(SMTP_PASS)",
+        "admin_email": "env(SMTP_ADMIN_EMAIL)",
+        "sender_name": "Giant Book of Yum"
+      }
     }
   },
 
