@@ -38,7 +38,7 @@ function ErrorNote({ message }) {
   return <p role="alert" className="rounded-2xl bg-coral-pale px-4 py-3 text-sm text-forest">{message}</p>
 }
 
-export function SignInPage({ session, canEdit, onSignOut }) {
+export function SignInPage({ session, canEdit, canEditCategories = false, onSignOut }) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
@@ -68,6 +68,7 @@ export function SignInPage({ session, canEdit, onSignOut }) {
           <div className="flex flex-wrap gap-3">
             {canEdit && <a href="#/new" className={primaryButton}><Icon name="plus" className="size-4" /> Add a recipe</a>}
             {canEdit && <a href="#/import" className={quietButton}><Icon name="camera" className="size-4" /> Add from a photo</a>}
+            {canEditCategories && <a href="#/categories" className={quietButton}><Icon name="book" className="size-4" /> Manage categories</a>}
             <button type="button" onClick={onSignOut} className={quietButton}>Sign out</button>
           </div>
         </div>

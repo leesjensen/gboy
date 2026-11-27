@@ -18,7 +18,7 @@ See `install/supabase/README.md` to create the database and add admins. Vite pri
 
 ## Browse and update recipes
 
-Admins edit recipes in the app: tap **Sign in** in the header (or **Account** in the footer), enter the 6-digit code from your email, then use **Add recipe** or a recipe's **Edit** button. Recipe IDs never change after creation, so links keep working.
+Admins edit recipes in the app: tap **Sign in** in the header (or **Account** in the footer), enter the 6-digit code from your email, then use **Add recipe** or a recipe's **Edit** button. Admins with full access also add, edit, reorder and delete categories from **Manage categories** on the account page, or **Edit category** on a category page. Recipe IDs never change after creation, so links keep working.
 
 The original extraction is in `data/recipes.json`, which seeds the database (`install/supabase/seed_recipes.sh`). Edits made in the app live only in the database. Records include a stable ID, title, source ("from …" credit), category and subcategory, source page, formatted recipe blocks, and the source transcription. The PDF is the source of truth. To rebuild the extracted collection on macOS:
 

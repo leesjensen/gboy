@@ -1,76 +1,24 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { RecipeEditor, SignInPage } from './Admin.jsx';
+import { CategoriesPage } from './Categories.jsx';
 import { ImportPage } from './Import.jsx';
 import { OfflineBanner, OfflineHeaderLink, OfflinePage, useOfflineAutoRefresh } from './Offline.jsx';
 import { useOfflineMeta, useOnlineStatus } from './offline.js';
 import { SearchPage, searchHref } from './Search.jsx';
-import { canEditRecipes, fetchCategories, fetchMyRating, fetchRecipe, fetchRecipeSummaries, isConfigured, rateRecipe, rememberSignInReturn, supabase, takeSignInReturn } from './supabase.js';
+import { canEditRecipes, canManageCategories, fetchCategories, fetchMyRating, fetchRecipe, fetchRecipeSummaries, isConfigured, rateRecipe, rememberSignInReturn, supabase, takeSignInReturn } from './supabase.js';
 import { Breadcrumbs, Icon, RatingBadge, StarInput, Stars, formatRating } from './ui.jsx';
 
-const categoryDetails = {
-  appetizers: {
-    icon: '✳',
-    tint: 'coral',
-    description: 'A little something to start the table and get everyone gathered around.',
-  },
-  backpacking: {
-    icon: '⌁',
-    tint: 'gold',
-    description: 'Trail-friendly favorites and camp cooking ideas from the collection.',
-  },
-  belgian: {
-    icon: '✦',
-    tint: 'blue',
-    description: 'A small collection of Belgian family recipes, from waffles to waterzooi.',
-  },
-  breads: {
-    icon: '⌂',
-    tint: 'gold',
-    description: 'Warm loaves, quick breads, rolls, muffins, and doughs worth sharing.',
-  },
-  breakfast: {
-    icon: '☀',
-    tint: 'sage',
-    description: 'Pancakes, oatmeal, brunch bakes, and easy starts to the day.',
-  },
-  desserts: {
-    icon: '♡',
-    tint: 'rose',
-    description: 'Cookies, cakes, pies, frozen treats, and a little something sweet.',
-  },
-  drinks: {
-    icon: '◌',
-    tint: 'blue',
-    description: 'Smoothies, coolers, punches, and cozy cups for every season.',
-  },
-  entrees: {
-    icon: '✳',
-    tint: 'sage',
-    description: 'Comforting mains, weeknight dinners, sandwiches, and wraps.',
-  },
-  salads: {
-    icon: '❋',
-    tint: 'sage',
-    description: 'Fresh greens, pasta salads, and colorful bowls for the middle of the table.',
-  },
-  sauces: {
-    icon: '◉',
-    tint: 'coral',
-    description: 'The dips, dressings, sauces, syrups, and spreads that make a meal sing.',
-  },
-  sides: {
-    icon: '✿',
-    tint: 'gold',
-    description: 'Vegetables, potatoes, grains, and all the good things alongside.',
-  },
-  soups: {
-    icon: '◒',
-    tint: 'blue',
-    description: 'A comforting pot for a chilly evening, a busy day, or a full table.',
-  },
-};
-
+// Used when a category has no styling yet (or an offline copy predates it).
 const defaultCategoryDetails = { icon: '✦', tint: 'sage', description: '' };
+
+function withCategoryDefaults(category) {
+  return {
+    ...category,
+    icon: category.icon || defaultCategoryDetails.icon,
+    tint: category.tint || defaultCategoryDetails.tint,
+    description: category.description ?? defaultCategoryDetails.description,
+  };
+}
 
 function parseRoute() {
   const segments = window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -81,6 +29,7 @@ function parseRoute() {
   if (segments[0] === 'import') return { page: 'import', category: segments[1] };
   if (segments[0] === 'account' || segments[0] === 'admin') return { page: 'account' };
   if (segments[0] === 'offline') return { page: 'offline' };
+  if (segments[0] === 'categories') return { page: 'categories', id: segments[1] };
   if (segments[0] === 'search') {
     try {
       return { page: 'search', query: decodeURIComponent(segments.slice(1).join('/')) };
@@ -206,7 +155,7 @@ const sortOptions = [
 function categoryRecipes(categories, recipes) {
   return categories.map((category) => {
     const matching = recipes.filter((recipe) => recipe.category === category.id);
-    return { ...defaultCategoryDetails, ...categoryDetails[category.id], ...category, count: matching.length, recipes: matching };
+    return { ...withCategoryDefaults(category), count: matching.length, recipes: matching };
   });
 }
 
@@ -256,8 +205,9 @@ function hashString(text) {
 // name order within its category), so a page of desserts mixes cakes,
 // cookies, and pies at a glance. Six covers the largest category.
 const subcategoryShades = ['bg-white/50', 'bg-forest/[0.06]', 'bg-white/25', 'bg-forest/[0.1]', 'bg-white/10', 'bg-forest/[0.03]'];
-// Card details shared from App: subcategory shade positions and category names.
-const CardContext = createContext({ shades: {}, categoryNames: {} });
+// Card details shared from App: subcategory shade positions and each
+// category's name, icon and tint.
+const CardContext = createContext({ shades: {}, categories: {} });
 
 function subcategoryShadeIndex(recipes) {
   const byCategory = {};
@@ -275,7 +225,7 @@ function subcategoryShadeIndex(recipes) {
 // cards), shaded by subcategory. The rings shift with the recipe ID so
 // neighboring cards don't look identical.
 function RecipeBand({ recipe }) {
-  const { tint, icon } = { ...defaultCategoryDetails, ...categoryDetails[recipe.category] };
+  const { tint, icon } = useContext(CardContext).categories[recipe.category] || defaultCategoryDetails;
   const hash = hashString(recipe.id);
   const position = useContext(CardContext).shades[`${recipe.category}/${recipe.subcategory}`];
   const shade = position === undefined ? '' : subcategoryShades[position % subcategoryShades.length];
@@ -290,7 +240,7 @@ function RecipeBand({ recipe }) {
 }
 
 function RecipeCard({ recipe }) {
-  const categoryName = useContext(CardContext).categoryNames[recipe.category] || recipe.category;
+  const categoryName = useContext(CardContext).categories[recipe.category]?.name || recipe.category;
   return (
     <a href={`#/recipe/${recipe.id}`} className="group flex h-full flex-col rounded-[1.55rem] border border-forest/8 bg-white p-3.5 shadow-sm shadow-forest/[0.025] transition duration-300 hover:-translate-y-1 hover:border-forest/15 hover:shadow-xl hover:shadow-forest/10 sm:p-4">
       <RecipeBand recipe={recipe} />
@@ -425,7 +375,7 @@ function HomePage({ recipes, allCategories }) {
   );
 }
 
-function CategoryPage({ categoryId, initialSort, recipes, categoriesMap, canEdit }) {
+function CategoryPage({ categoryId, initialSort, recipes, categoriesMap, canEdit, canEditCategories }) {
   const category = categoriesMap[categoryId];
   const [selectedSubcategory, setSelectedSubcategory] = useState('All');
   const [sort, setSort] = useState(() => (sortOptions.some((option) => option.id === initialSort) ? initialSort : 'title'));
@@ -457,6 +407,11 @@ function CategoryPage({ categoryId, initialSort, recipes, categoriesMap, canEdit
           <p className="mt-3 max-w-xl text-sm leading-6 text-forest/60 sm:text-base">{description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {canEditCategories && category && (
+            <a href={`#/categories/${categoryId}`} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-forest shadow-sm ring-1 ring-forest/10 transition hover:bg-sage-pale">
+              <Icon name="edit" className="size-4" /> Edit category
+            </a>
+          )}
           {canEdit && (
             <a href={categoryId === 'all' ? '#/new' : `#/new/${categoryId}`} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-3 text-sm font-semibold text-forest shadow-sm ring-1 ring-forest/10 transition hover:bg-sage-pale">
               <Icon name="plus" className="size-4" /> Add recipe
@@ -863,6 +818,7 @@ export default function App() {
   const [loadError, setLoadError] = useState(false);
   const [session, setSession] = useState(null);
   const [canEdit, setCanEdit] = useState(false);
+  const [canEditCategories, setCanEditCategories] = useState(false);
   const [recipeVersion, setRecipeVersion] = useState(0);
   const online = useOnlineStatus();
   const offlineCopy = useOfflineMeta();
@@ -908,12 +864,16 @@ export default function App() {
   useEffect(() => {
     if (!userId) {
       setCanEdit(false);
+      setCanEditCategories(false);
       return undefined;
     }
     let cancelled = false;
     canEditRecipes()
       .then((allowed) => !cancelled && setCanEdit(allowed))
       .catch(() => !cancelled && setCanEdit(false));
+    canManageCategories()
+      .then((allowed) => !cancelled && setCanEditCategories(allowed))
+      .catch(() => !cancelled && setCanEditCategories(false));
     return () => {
       cancelled = true;
     };
@@ -930,7 +890,7 @@ export default function App() {
 
   const allCategories = useMemo(() => categoryRecipes(categories, recipes || []), [categories, recipes]);
   const cardContext = useMemo(
-    () => ({ shades: subcategoryShadeIndex(recipes || []), categoryNames: Object.fromEntries(categories.map((category) => [category.id, category.name])) }),
+    () => ({ shades: subcategoryShadeIndex(recipes || []), categories: Object.fromEntries(categories.map((category) => [category.id, withCategoryDefaults(category)])) }),
     [recipes, categories],
   );
   const recipesById = useMemo(() => Object.fromEntries((recipes || []).map((recipe) => [recipe.id, recipe])), [recipes]);
@@ -964,11 +924,15 @@ export default function App() {
   else if (route.page === 'account' && !online && !session) content = <StatusMessage title="Signing in needs a connection." message="You can still browse any recipes you’ve downloaded." />;
   else if (loadError && !online) content = <OfflineEmpty />;
   else if (loadError) content = <StatusMessage title="The recipe box is taking a moment." message="Refresh the page to load the collection." />;
-  else if (route.page === 'account') content = <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
+  else if (route.page === 'account') content = <SignInPage session={session} canEdit={canEdit} canEditCategories={canEditCategories} onSignOut={signOut} />;
   else if (!recipes) content = <StatusMessage title="Opening the recipe box…" loading />;
+  else if (route.page === 'categories' && !online) content = <StatusMessage title="Editing needs a connection." message="Recipes you’ve downloaded are still here to read." />;
+  else if (route.page === 'categories' && !canEditCategories) {
+    content = session ? <StatusMessage title="This account can't edit categories." message="Ask the site owner for admin access to everything." /> : <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
+  } else if (route.page === 'categories') content = <CategoriesPage key={route.id || 'list'} categories={allCategories} initialEditing={route.id} onChanged={loadCollection} />;
   else if (route.page === 'search') content = <SearchPage key={route.query} initialQuery={route.query} categoriesMap={categoriesMap} recipesById={recipesById} />;
   else if (route.page === 'home') content = <HomePage recipes={recipes} allCategories={allCategories} />;
-  else if (route.page === 'category') content = <CategoryPage key={`${route.id}/${route.sort || ''}`} categoryId={route.id} initialSort={route.sort} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} />;
+  else if (route.page === 'category') content = <CategoryPage key={`${route.id}/${route.sort || ''}`} categoryId={route.id} initialSort={route.sort} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} canEditCategories={canEditCategories} />;
   else if (['new', 'edit', 'import'].includes(route.page) && !online) content = <StatusMessage title="Editing needs a connection." message="Recipes you’ve downloaded are still here to read." />;
   else if (['new', 'edit', 'import'].includes(route.page) && !canEdit) {
     content = session ? <StatusMessage title="This account can't edit recipes." message="Ask the site owner to make you an admin." /> : <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;

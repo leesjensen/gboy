@@ -17,6 +17,7 @@ export const supabase = isConfigured
 // PostgREST aliases map the table columns onto the app's camelCase shape.
 const summaryColumns = 'id, title, category:category_id, subcategory, sourcePage:source_page'
 const detailColumns = `${summaryColumns}, source, sourceEndPage:source_end_page, blocks, sourceText:source_text`
+const categoryColumns = 'id, name, sortOrder:sort_order, icon, tint, description'
 const pageSize = 1000
 
 function check({ data, error }) {
@@ -93,7 +94,7 @@ async function fetchAllPages(columns, { size = pageSize, onPage, tune = asIs } =
 
 export async function fetchCategories() {
   return withOfflineFallback(
-    async (tune) => check(await tune(supabase.from('categories').select('id, name, sortOrder:sort_order').order('sort_order'))),
+    async (tune) => check(await tune(supabase.from('categories').select(categoryColumns).order('sort_order'))),
     getOfflineCategories,
   )
 }
@@ -119,7 +120,7 @@ export async function fetchRecipe(id) {
 // Downloads every category and full recipe for offline reading.
 // onProgress(done, total) reports recipes received so far.
 export async function downloadForOffline(onProgress) {
-  const categories = check(await supabase.from('categories').select('id, name, sortOrder:sort_order').order('sort_order'))
+  const categories = check(await supabase.from('categories').select(categoryColumns).order('sort_order'))
   const [recipes, totals] = await Promise.all([fetchAllPages(detailColumns, { size: 200, onPage: onProgress }), optionalRatingTotals()])
   await saveOfflineCollection(categories, withRatings(recipes, totals))
   return recipes.length
@@ -135,6 +136,50 @@ function toRow(recipe) {
     source_end_page: recipe.sourceEndPage || null,
     blocks: recipe.blocks,
   }
+}
+
+function categoryRow(category) {
+  return {
+    name: category.name.trim(),
+    icon: category.icon.trim(),
+    tint: category.tint,
+    description: category.description.trim(),
+  }
+}
+
+// Category management (#/categories). Writes need an admin grant on '*'.
+export async function createCategory(category) {
+  const { data, error } = await supabase.from('categories')
+    .insert({ id: category.id, sort_order: category.sortOrder, ...categoryRow(category) }).select(categoryColumns).single()
+  if (error) throw friendlyCategoryError(error)
+  return data
+}
+
+export async function updateCategory(category) {
+  const { data, error } = await supabase.from('categories')
+    .update(categoryRow(category)).eq('id', category.id).select(categoryColumns)
+  if (error) throw friendlyCategoryError(error)
+  if (!data.length) throw new Error('Your account is not allowed to edit categories.')
+  return data[0]
+}
+
+export async function deleteCategory(id) {
+  const { data, error } = await supabase.from('categories').delete().eq('id', id).select('id')
+  if (error) throw friendlyCategoryError(error)
+  if (!data.length) throw new Error('Your account is not allowed to delete categories.')
+}
+
+// ids: every category id in the new order.
+export async function reorderCategories(ids) {
+  const { error } = await supabase.rpc('reorder_categories', { p_ids: ids })
+  if (error) throw friendlyCategoryError(error)
+}
+
+function friendlyCategoryError(error) {
+  if (error?.code === '23505') return new Error('A category with that ID already exists. Choose a different ID.')
+  if (error?.code === '23503') return new Error('This category still has recipes. Move them to another category first.')
+  if (error?.code === '23514') return new Error('Check the name (up to 60 characters), icon (up to 4), and description (up to 200).')
+  return friendlyError(error)
 }
 
 function friendlyError(error) {
@@ -171,6 +216,10 @@ export async function deleteRecipe(id) {
 
 export async function canEditRecipes() {
   return Boolean(check(await supabase.rpc('has_role', { p_predicate: 'admin', p_object: 'recipe/*' })))
+}
+
+export async function canManageCategories() {
+  return Boolean(check(await supabase.rpc('has_role', { p_predicate: 'admin', p_object: 'category/*' })))
 }
 
 // Anyone can sign in (to rate recipes); new accounts confirm their email

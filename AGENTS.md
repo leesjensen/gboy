@@ -6,8 +6,9 @@ This is a recipe browser for GBoy, the Giant Book of Yum (`gboy.pdf`, 273 pages)
 
 ## Architecture
 
-- `src/App.jsx` implements the pages, data loading, and lightweight hash routing (`#/category/:id`, `#/recipe/:id`, `#/recipe/:id/edit`, `#/new[/:category]`, `#/account` (also `#/admin`), `#/search/:query`, `#/offline`). Category pages take an optional sort: `#/category/:id/top-rated` or `/most-rated`.
+- `src/App.jsx` implements the pages, data loading, and lightweight hash routing (`#/category/:id`, `#/recipe/:id`, `#/recipe/:id/edit`, `#/new[/:category]`, `#/account` (also `#/admin`), `#/search/:query`, `#/offline`, `#/categories[/:id]`). Category pages take an optional sort: `#/category/:id/top-rated` or `/most-rated`.
 - `src/Import.jsx` (`#/import[/:category]`) sends a recipe photo to the `import-recipe` Edge Function in `install/supabase/functions/`, which calls Gemini (key in Supabase secrets) and returns a draft for the editor; it never writes to the database.
+- `src/Categories.jsx` (`#/categories`) lets admins with a `*` grant add, edit (name, icon, color, description), reorder and delete empty categories. Category styling lives in the `categories` table (`icon`, `tint`, `description`), not in code; `src/App.jsx` falls back to ✦ and sage when it is missing.
 - `src/Admin.jsx` has email-code sign-in (a 6-digit code sent by Amazon SES), the account page (sign out, delete account) and the recipe editor; `src/supabase.js` has the client and all queries; `src/ui.jsx` has shared `Icon`, `Breadcrumbs` and the star components (`Stars`, `RatingBadge`, `StarInput`).
 - `src/main.jsx` mounts React; `src/index.css` contains the Tailwind theme and shared styles.
 - The app loads category and recipe summaries on start and each recipe's full text when it is opened. It needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (`.env.local` locally, repository variables in CI). Row-level security allows public reads and writes only for users with an `admin` grant in `public.roles`.

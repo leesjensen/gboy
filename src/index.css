@@ -51,21 +51,44 @@ button {
   box-shadow: 0 28px 50px -25px rgba(32, 63, 48, 0.33), 0 4px 14px rgba(32, 63, 48, 0.08);
 }
 
+/* Category colors (categories.tint). Keep in step with the list in
+   src/Categories.jsx and the check constraint on categories.tint. */
 .category-card.tint-coral,
 .recipe-art.tint-coral,
 .category-pill.tint-coral { background-color: #f1ddd5; }
+.category-card.tint-peach,
+.recipe-art.tint-peach,
+.category-pill.tint-peach { background-color: #f6e2cc; }
 .category-card.tint-gold,
 .recipe-art.tint-gold,
 .category-pill.tint-gold { background-color: #f1e7ca; }
-.category-card.tint-blue,
-.recipe-art.tint-blue,
-.category-pill.tint-blue { background-color: #dce7e5; }
+.category-card.tint-lemon,
+.recipe-art.tint-lemon,
+.category-pill.tint-lemon { background-color: #f2eec4; }
 .category-card.tint-sage,
 .recipe-art.tint-sage,
 .category-pill.tint-sage { background-color: #e5ebdf; }
+.category-card.tint-mint,
+.recipe-art.tint-mint,
+.category-pill.tint-mint { background-color: #d7ece0; }
+.category-card.tint-blue,
+.recipe-art.tint-blue,
+.category-pill.tint-blue { background-color: #dce7e5; }
+.category-card.tint-sky,
+.recipe-art.tint-sky,
+.category-pill.tint-sky { background-color: #dae5f2; }
+.category-card.tint-lavender,
+.recipe-art.tint-lavender,
+.category-pill.tint-lavender { background-color: #e4def1; }
 .category-card.tint-rose,
 .recipe-art.tint-rose,
-.category-pill.tint-rose { background-color: #f0e1dc; }
+.category-pill.tint-rose { background-color: #f2d8e2; }
+.category-card.tint-sand,
+.recipe-art.tint-sand,
+.category-pill.tint-sand { background-color: #ebe4d8; }
+.category-card.tint-slate,
+.recipe-art.tint-slate,
+.category-pill.tint-slate { background-color: #e0e3e8; }
 
 .recipe-art {
   background-image: radial-gradient(circle at 80% 15%, rgba(255, 255, 255, 0.62), transparent 32%), linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 58%);

@@ -79,6 +79,8 @@ Permissions live in `roles` as actor / object / predicate triples:
 
 RLS checks each row as an object, for example `recipe/baked-mushrooms-lindsey-fellars` or `category/desserts`, using `public.has_role(predicate, object)`. A grant matches when its object is `*`, the row's `<type>/*`, or the exact object. So `*` admins can write recipes and categories, and `recipe/*` admins can write recipes only. `roles` has no client write policies, so grants can only be managed with `add_admin.sh` or the SQL editor. To add a predicate or object type, write a migration that changes the `roles` check constraint, and update the allowed objects in `add_admin.sh`.
 
+Categories carry their own `icon`, `tint` (coral, gold, blue, sage or rose) and `description`, which admins edit at `#/categories` in the app. `reorder_categories(p_ids)` sets the home page order in one call. A category with recipes can't be deleted, because `recipes.category_id` references it.
+
 Ratings live in `ratings`: one 1–5 rating per user per recipe, primary key `(recipe_id, user_id)`. A rating is visible only to the person who made it and to recipe admins, who can also remove it. The app calls `rate_recipe(p_recipe_id, p_stars)` to set a rating, or passes `null` to remove it. A trigger keeps `recipe_rating_stats` (count, sum, average) current, and anyone can read it; the app merges those totals into the recipe summaries. Deleting a recipe or an account removes the related ratings. `delete_my_account()` lets a signed-in person delete their own account from the account page.
 
 ## Using it from the app
