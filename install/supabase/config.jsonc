@@ -23,12 +23,15 @@
     // Set in install/supabase/.env.
     "site_url": "env(SITE_URL)",
     "additional_redirect_urls": ["http://localhost:5173/", "http://localhost:4173/"],
-    // Only admins created by add_admin.sh can sign in.
-    "enable_signup": false,
+    // Anyone can sign in by email to rate recipes. New accounts get no
+    // rights; editing still requires an admin grant (add_admin.sh).
+    "enable_signup": true,
 
     "email": {
       "enabled": true,
-      "enable_confirmations": false,
+      // Accounts must confirm their email before signing in, so ratings can't
+      // be stuffed with made-up addresses through password sign-up.
+      "enable_confirmations": true,
       "max_frequency": "60s",
       // Admins sign in with the link in Supabase's default magic link email,
       // which expires after 10 minutes.

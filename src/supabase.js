@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import {
   deleteOfflineRecipe, getOfflineCategories, getOfflineMeta, getOfflineRecipe, getOfflineRecipes, isNetworkError,
-  putOfflineRecipe, saveOfflineCollection, searchOffline,
+  putOfflineRecipe, saveOfflineCollection, searchOffline, setOfflineRating,
 } from './offline.js'
 
 const url = import.meta.env.VITE_SUPABASE_URL
@@ -51,9 +51,33 @@ async function withOfflineFallback(online, offline) {
   }
 }
 
-function toSummary({ id, title, category, subcategory, sourcePage }) {
-  return { id, title, category, subcategory, sourcePage }
+function toSummary({ id, title, category, subcategory, sourcePage, ratingAverage, ratingCount }) {
+  return { id, title, category, subcategory, sourcePage, ratingAverage, ratingCount }
 }
+
+// Rating totals (install/supabase/migrations/*_recipe_ratings.sql) as
+// { [recipeId]: { ratingAverage, ratingCount } }. Unrated recipes are absent.
+async function fetchRatingTotals(tune = asIs) {
+  const rows = []
+  for (let from = 0; ; from += pageSize) {
+    const page = check(await tune(supabase.from('recipe_rating_stats')
+      .select('recipe_id, rating_count, rating_average').order('recipe_id').range(from, from + pageSize - 1)))
+    rows.push(...page)
+    if (page.length < pageSize) break
+  }
+  return Object.fromEntries(rows.map((row) => [row.recipe_id, { ratingAverage: Number(row.rating_average), ratingCount: row.rating_count }]))
+}
+
+// Ratings are extra: if their totals can't load, recipes still do (unrated).
+function optionalRatingTotals(tune) {
+  return fetchRatingTotals(tune).catch((error) => {
+    console.warn('Rating totals unavailable', error)
+    return {}
+  })
+}
+
+const unrated = { ratingAverage: null, ratingCount: 0 }
+const withRatings = (recipes, totals) => recipes.map((recipe) => ({ ...recipe, ...(totals[recipe.id] || unrated) }))
 
 async function fetchAllPages(columns, { size = pageSize, onPage, tune = asIs } = {}) {
   const rows = []
@@ -77,7 +101,10 @@ export async function fetchCategories() {
 // Every recipe without its body, for the home page, category lists and counts.
 export async function fetchRecipeSummaries() {
   return withOfflineFallback(
-    (tune) => fetchAllPages(summaryColumns, { tune }),
+    async (tune) => {
+      const [recipes, totals] = await Promise.all([fetchAllPages(summaryColumns, { tune }), optionalRatingTotals(tune)])
+      return withRatings(recipes, totals)
+    },
     async () => (await getOfflineRecipes())?.map(toSummary) ?? null,
   )
 }
@@ -93,8 +120,8 @@ export async function fetchRecipe(id) {
 // onProgress(done, total) reports recipes received so far.
 export async function downloadForOffline(onProgress) {
   const categories = check(await supabase.from('categories').select('id, name, sortOrder:sort_order').order('sort_order'))
-  const recipes = await fetchAllPages(detailColumns, { size: 200, onPage: onProgress })
-  await saveOfflineCollection(categories, recipes)
+  const [recipes, totals] = await Promise.all([fetchAllPages(detailColumns, { size: 200, onPage: onProgress }), optionalRatingTotals()])
+  await saveOfflineCollection(categories, withRatings(recipes, totals))
   return recipes.length
 }
 
@@ -146,12 +173,57 @@ export async function canEditRecipes() {
   return Boolean(check(await supabase.rpc('has_role', { p_predicate: 'admin', p_object: 'recipe/*' })))
 }
 
+// Anyone can sign in (to rate recipes); new accounts confirm their email
+// first. The email link returns to the site root, so a "Sign in" link
+// remembers the page it was tapped on (rememberSignInReturn) and the app goes
+// back there after sign-in (takeSignInReturn).
+const returnKey = 'gboy-sign-in-return'
+const returnMaxAgeMs = 60 * 60 * 1000
+
+export function rememberSignInReturn(hash = window.location.hash) {
+  if (!hash || /^#\/(account|admin)/.test(hash)) return
+  localStorage.setItem(returnKey, JSON.stringify({ hash, at: Date.now() }))
+}
+
+export function takeSignInReturn() {
+  const saved = localStorage.getItem(returnKey)
+  localStorage.removeItem(returnKey)
+  try {
+    const { hash, at } = JSON.parse(saved)
+    return Date.now() - at < returnMaxAgeMs ? hash : null
+  } catch {
+    return null
+  }
+}
+
 export async function sendSignInLink(email) {
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + window.location.pathname },
+    options: { shouldCreateUser: true, emailRedirectTo: window.location.origin + window.location.pathname },
   })
   if (error) throw error
+}
+
+export async function deleteMyAccount() {
+  check(await supabase.rpc('delete_my_account'))
+  await supabase.auth.signOut({ scope: 'local' })
+}
+
+// The signed-in user's own rating of a recipe (1-5), or null.
+export async function fetchMyRating(recipeId, userId) {
+  const row = check(await supabase.from('ratings').select('stars').eq('recipe_id', recipeId).eq('user_id', userId).maybeSingle())
+  return row?.stars ?? null
+}
+
+// Sets (1-5) or removes (null) the user's rating, then returns the recipe's
+// new totals.
+export async function rateRecipe(recipeId, stars) {
+  const { error } = await supabase.rpc('rate_recipe', { p_recipe_id: recipeId, p_stars: stars })
+  if (error) throw friendlyError(error)
+  const row = check(await supabase.from('recipe_rating_stats').select('rating_count, rating_average').eq('recipe_id', recipeId).maybeSingle())
+  const totals = row ? { ratingAverage: Number(row.rating_average), ratingCount: row.rating_count } : unrated
+  await setOfflineRating(recipeId, totals).catch(() => {})
+  return totals
 }
 
 // Ranked full-text search (install/supabase/migrations/*_search_recipes.sql).

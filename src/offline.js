@@ -92,8 +92,18 @@ export async function saveOfflineCollection(categories, recipes) {
 export async function putOfflineRecipe(recipe) {
   const current = await load()
   if (!current) return
-  const recipes = current.recipes.filter((item) => item.id !== recipe.id).concat(recipe)
+  // Saved recipes come back without rating totals; keep the downloaded ones.
+  const previous = current.recipes.find((item) => item.id === recipe.id)
+  const merged = { ratingAverage: previous?.ratingAverage ?? null, ratingCount: previous?.ratingCount ?? 0, ...recipe }
+  const recipes = current.recipes.filter((item) => item.id !== recipe.id).concat(merged)
   recipes.sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id))
+  await writeCollection(current.categories, recipes, current.meta.downloadedAt)
+}
+
+export async function setOfflineRating(id, { ratingAverage, ratingCount }) {
+  const current = await load()
+  if (!current) return
+  const recipes = current.recipes.map((item) => (item.id === id ? { ...item, ratingAverage, ratingCount } : item))
   await writeCollection(current.categories, recipes, current.meta.downloadedAt)
 }
 

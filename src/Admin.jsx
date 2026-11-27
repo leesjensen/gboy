@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { createRecipe, deleteRecipe, sendSignInLink, updateRecipe } from './supabase.js'
+import { createRecipe, deleteMyAccount, deleteRecipe, sendSignInLink, updateRecipe } from './supabase.js'
 import { Breadcrumbs, Icon } from './ui.jsx'
 
 const blockTypes = [
@@ -42,19 +42,52 @@ export function SignInPage({ session, canEdit, onSignOut }) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  async function removeAccount() {
+    setStatus('deleting')
+    setError('')
+    try {
+      await deleteMyAccount()
+      window.location.hash = '#/'
+    } catch (err) {
+      setStatus('idle')
+      setError(err.message || 'Your account could not be deleted. Try again in a moment.')
+    }
+  }
 
   if (session) {
     return (
-      <AdminShell crumb={<span className="text-forest">Admin</span>} eyebrow="Admin" title="You're signed in">
+      <AdminShell crumb={<span className="text-forest">Account</span>} eyebrow="Your account" title="You're signed in">
         <div className="space-y-5 rounded-[1.65rem] bg-white p-6 shadow-sm ring-1 ring-forest/8 sm:p-8">
           <p className="text-sm leading-6 text-forest/70">
             Signed in as <strong className="font-semibold text-forest">{session.user.email}</strong>.{' '}
-            {canEdit ? 'You can add, edit, and delete recipes.' : 'This account can browse recipes but not edit them.'}
+            {canEdit ? 'You can rate recipes and add, edit, and delete them.' : 'You can rate any recipe from its page.'}
           </p>
           <div className="flex flex-wrap gap-3">
             {canEdit && <a href="#/new" className={primaryButton}><Icon name="plus" className="size-4" /> Add a recipe</a>}
             {canEdit && <a href="#/import" className={quietButton}><Icon name="camera" className="size-4" /> Add from a photo</a>}
             <button type="button" onClick={onSignOut} className={quietButton}>Sign out</button>
+          </div>
+        </div>
+        <div className="mt-5 rounded-[1.65rem] bg-white p-6 shadow-sm ring-1 ring-forest/8 sm:p-8">
+          <h2 className="font-serif text-xl font-semibold text-forest">Delete your account</h2>
+          <p className="mt-2 text-sm leading-6 text-forest/65">
+            This removes your account, your email address, and all of your ratings{canEdit ? ', along with your admin access' : ''}. It can’t be undone.
+          </p>
+          <ErrorNote message={error} />
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {!confirmDelete ? (
+              <button type="button" onClick={() => setConfirmDelete(true)} className={quietButton}>Delete my account…</button>
+            ) : (
+              <>
+                <span className="text-sm text-forest/70">Delete your account and ratings for good?</span>
+                <button type="button" onClick={removeAccount} disabled={status === 'deleting'} className={`${quietButton} text-coral`}>
+                  {status === 'deleting' ? 'Deleting…' : 'Delete account'}
+                </button>
+                <button type="button" onClick={() => setConfirmDelete(false)} disabled={status === 'deleting'} className={quietButton}>Keep it</button>
+              </>
+            )}
           </div>
         </div>
       </AdminShell>
@@ -70,27 +103,27 @@ export function SignInPage({ session, canEdit, onSignOut }) {
       setStatus('sent')
     } catch (err) {
       setStatus('idle')
-      setError(/signup|not allowed|not found/i.test(err.message)
-        ? 'That email is not set up as an admin.'
+      setError(/rate limit|too many/i.test(err.message)
+        ? 'Too many sign-in emails have been sent recently. Try again in a little while.'
         : err.message || 'The sign-in email could not be sent.')
     }
   }
 
   return (
-    <AdminShell crumb={<span className="text-forest">Admin sign in</span>} eyebrow="Admin" title="Sign in to edit recipes">
+    <AdminShell crumb={<span className="text-forest">Sign in</span>} eyebrow="Your account" title="Sign in to rate recipes">
       <div className="rounded-[1.65rem] bg-white p-6 shadow-sm ring-1 ring-forest/8 sm:p-8">
         {status === 'sent' ? (
           <div className="flex gap-4">
             <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-sage-pale text-forest"><Icon name="mail" className="size-5" /></span>
             <div>
               <h2 className="font-serif text-2xl font-semibold text-forest">Check your email</h2>
-              <p className="mt-2 text-sm leading-6 text-forest/65">We sent a sign-in link to <strong className="font-semibold text-forest">{email}</strong>. Open it in this browser within 10 minutes.</p>
+              <p className="mt-2 text-sm leading-6 text-forest/65">We sent a link to <strong className="font-semibold text-forest">{email}</strong>. Open it in this browser to sign in. The first time, the email asks you to confirm your address.</p>
               <button type="button" onClick={() => setStatus('idle')} className="mt-4 text-sm font-semibold text-coral">Use a different email</button>
             </div>
           </div>
         ) : (
           <form onSubmit={submit} className="space-y-5">
-            <p className="text-sm leading-6 text-forest/65">Recipe admins get a one-time sign-in link by email. Anyone can browse without signing in.</p>
+            <p className="text-sm leading-6 text-forest/65">Sign in with your email to rate recipes. There’s no password: we email you a one-time link. Browsing and searching never need an account.</p>
             <div>
               <label htmlFor="email" className={labelClass}>Email</label>
               <input id="email" type="email" required autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass} placeholder="you@example.com" />

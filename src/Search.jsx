@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useOnlineStatus } from './offline.js'
 import { searchRecipes } from './supabase.js'
-import { Breadcrumbs, Icon } from './ui.jsx'
+import { Breadcrumbs, Icon, RatingBadge } from './ui.jsx'
 
 const minLength = 2
 const debounceMs = 250
@@ -23,7 +23,7 @@ function queryWords(query) {
   return query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((word) => word.length > 1)
 }
 
-export function SearchPage({ initialQuery, categoriesMap }) {
+export function SearchPage({ initialQuery, categoriesMap, recipesById = {} }) {
   const [query, setQuery] = useState(initialQuery)
   const [results, setResults] = useState(null)
   const [status, setStatus] = useState('idle')
@@ -90,6 +90,7 @@ export function SearchPage({ initialQuery, categoriesMap }) {
         <ul className={`mt-6 space-y-2.5 transition ${status === 'loading' ? 'opacity-60' : ''}`}>
           {results.map((recipe) => {
             const category = categoriesMap[recipe.category]
+            const rated = recipesById[recipe.id]
             return (
               <li key={recipe.id}>
                 <a href={`#/recipe/${recipe.id}`} className="group flex items-start gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-forest/8 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-forest/15 sm:p-5">
@@ -99,6 +100,7 @@ export function SearchPage({ initialQuery, categoriesMap }) {
                       {category?.name || recipe.category}{recipe.subcategory && ` · ${recipe.subcategory}`}
                     </span>
                     <span className="mt-1 block font-serif text-lg font-semibold leading-snug text-forest group-hover:text-coral"><Highlight text={recipe.title} words={words} /></span>
+                    {rated?.ratingCount > 0 && <RatingBadge average={rated.ratingAverage} count={rated.ratingCount} className="mt-1" />}
                     {recipe.match && <span className="mt-1.5 line-clamp-2 block text-sm leading-6 text-forest/60"><Highlight text={recipe.match} words={words} /></span>}
                   </span>
                   <Icon name="arrow" className="mt-1 size-4 shrink-0 text-forest/35 transition group-hover:translate-x-1 group-hover:text-coral" />

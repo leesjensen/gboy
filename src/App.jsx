@@ -4,8 +4,8 @@ import { ImportPage } from './Import.jsx';
 import { OfflineBanner, OfflineHeaderLink, OfflinePage, useOfflineAutoRefresh } from './Offline.jsx';
 import { useOfflineMeta, useOnlineStatus } from './offline.js';
 import { SearchPage, searchHref } from './Search.jsx';
-import { canEditRecipes, fetchCategories, fetchRecipe, fetchRecipeSummaries, isConfigured, supabase } from './supabase.js';
-import { Breadcrumbs, Icon } from './ui.jsx';
+import { canEditRecipes, fetchCategories, fetchMyRating, fetchRecipe, fetchRecipeSummaries, isConfigured, rateRecipe, rememberSignInReturn, supabase, takeSignInReturn } from './supabase.js';
+import { Breadcrumbs, Icon, RatingBadge, StarInput, Stars, formatRating } from './ui.jsx';
 
 const categoryDetails = {
   appetizers: {
@@ -74,12 +74,12 @@ const defaultCategoryDetails = { icon: '✦', tint: 'sage', description: '' };
 
 function parseRoute() {
   const segments = window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
-  if (segments[0] === 'category' && segments[1]) return { page: 'category', id: segments[1] };
+  if (segments[0] === 'category' && segments[1]) return { page: 'category', id: segments[1], sort: segments[2] };
   if (segments[0] === 'recipe' && segments[1] && segments[2] === 'edit') return { page: 'edit', id: segments[1] };
   if (segments[0] === 'recipe' && segments[1]) return { page: 'recipe', id: segments[1] };
   if (segments[0] === 'new') return { page: 'new', category: segments[1] };
   if (segments[0] === 'import') return { page: 'import', category: segments[1] };
-  if (segments[0] === 'admin') return { page: 'admin' };
+  if (segments[0] === 'account' || segments[0] === 'admin') return { page: 'account' };
   if (segments[0] === 'offline') return { page: 'offline' };
   if (segments[0] === 'search') {
     try {
@@ -120,7 +120,7 @@ function HeaderSearch() {
   );
 }
 
-function Header({ canEdit, page }) {
+function Header({ canEdit, signedIn, page }) {
   return (
     <header className="sticky top-0 z-30 border-b border-forest/8 bg-cream/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5 sm:px-8 lg:px-12">
@@ -139,11 +139,12 @@ function Header({ canEdit, page }) {
               <Icon name="plus" className="size-4" /> <span className="hidden sm:inline">Add recipe</span>
             </a>
           )}
-          {canEdit && (
-            <a href="#/admin" className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">
-              Admin
-            </a>
-          )}
+          <a href="#/account" onClick={() => rememberSignInReturn()} aria-label={signedIn ? 'Your account' : 'Sign in'} title={signedIn ? 'Your account' : 'Sign in'} className="grid size-9 place-items-center rounded-full text-forest/70 transition hover:bg-white hover:text-forest sm:hidden">
+            <Icon name="user" className="size-5" />
+          </a>
+          <a href="#/account" onClick={() => rememberSignInReturn()} className="hidden text-sm font-medium text-forest/70 transition hover:text-forest sm:inline">
+            {signedIn ? (canEdit ? 'Admin' : 'Account') : 'Sign in'}
+          </a>
           <a href="#/category/desserts" className={`${canEdit ? 'xl:inline-flex' : 'lg:inline-flex'} hidden rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-forest shadow-sm ring-1 ring-forest/10 transition hover:bg-sage-pale`}>
             Something sweet <Icon name="arrow" className="ml-2 size-4" />
           </a>
@@ -190,6 +191,17 @@ function HeroArt() {
     </div>
   );
 }
+
+// Highest average first; more ratings break ties, then title.
+function byRating(a, b) {
+  return (b.ratingAverage ?? -1) - (a.ratingAverage ?? -1) || (b.ratingCount || 0) - (a.ratingCount || 0) || a.title.localeCompare(b.title);
+}
+
+const sortOptions = [
+  { id: 'title', label: 'A–Z', compare: (a, b) => a.title.localeCompare(b.title) },
+  { id: 'top-rated', label: 'Highest rated', compare: byRating },
+  { id: 'most-rated', label: 'Most rated', compare: (a, b) => (b.ratingCount || 0) - (a.ratingCount || 0) || byRating(a, b) },
+];
 
 function categoryRecipes(categories, recipes) {
   return categories.map((category) => {
@@ -262,9 +274,13 @@ function RecipeCard({ recipe }) {
         </div>
         <h3 className="font-serif text-[1.16rem] font-semibold leading-snug text-forest transition group-hover:text-coral">{recipe.title}</h3>
         <div className="mt-auto flex items-center justify-between pt-4 text-xs text-forest/50">
-          <span className="flex items-center gap-1.5">
-            <Icon name="book" className="size-3.5" /> In the collection
-          </span>
+          {recipe.ratingCount ? (
+            <RatingBadge average={recipe.ratingAverage} count={recipe.ratingCount} />
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <Icon name="book" className="size-3.5" /> In the collection
+            </span>
+          )}
           <span className="grid size-8 place-items-center rounded-full bg-cream text-forest transition group-hover:bg-forest group-hover:text-white">
             <Icon name="arrow" className="size-3.5" />
           </span>
@@ -279,6 +295,7 @@ function HomePage({ recipes, allCategories }) {
     const ids = ['warm-pizza-dip-from-good-housekeeping-jan-feb-2021-p-107', 'chicken-alfredo', 'easy-pumpkin-loaf', 'black-bean-soup'];
     return ids.map((id) => recipes.find((recipe) => recipe.id === id)).filter(Boolean);
   }, [recipes]);
+  const favorites = useMemo(() => recipes.filter((recipe) => recipe.ratingCount).sort(byRating).slice(0, 4), [recipes]);
 
   return (
     <main>
@@ -326,6 +343,26 @@ function HomePage({ recipes, allCategories }) {
         </div>
       </section>
 
+      {favorites.length > 0 && (
+        <section className="mx-auto max-w-7xl px-5 pt-14 sm:px-8 sm:pt-20 lg:px-12">
+          <SectionHeading
+            eyebrow="Rated by the family"
+            title="Family favorites"
+            description="The recipes everyone keeps coming back to, by their star ratings."
+            action={
+              <a href="#/category/all/top-rated" className="inline-flex items-center gap-2 text-sm font-semibold text-forest transition hover:text-coral">
+                See all by rating <Icon name="arrow" className="size-4" />
+              </a>
+            }
+          />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {favorites.map((recipe) => (
+              <RecipeCard key={recipe.id} recipe={recipe} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-12">
         <SectionHeading
           eyebrow="A few from the recipe box"
@@ -364,14 +401,22 @@ function HomePage({ recipes, allCategories }) {
   );
 }
 
-function CategoryPage({ categoryId, recipes, categoriesMap, canEdit }) {
+function CategoryPage({ categoryId, initialSort, recipes, categoriesMap, canEdit }) {
   const category = categoriesMap[categoryId];
   const [selectedSubcategory, setSelectedSubcategory] = useState('All');
+  const [sort, setSort] = useState(() => (sortOptions.some((option) => option.id === initialSort) ? initialSort : 'title'));
   useEffect(() => setSelectedSubcategory('All'), [categoryId]);
+
+  function chooseSort(next) {
+    setSort(next);
+    // Keep the address shareable without a hashchange (which scrolls to top).
+    window.history.replaceState(null, '', `#/category/${categoryId}${next === 'title' ? '' : `/${next}`}`);
+  }
 
   const source = categoryId === 'all' ? recipes : category?.recipes || [];
   const subcategories = [...new Set(source.map((recipe) => recipe.subcategory).filter(Boolean))];
-  const visible = source.filter((recipe) => selectedSubcategory === 'All' || recipe.subcategory === selectedSubcategory).sort((a, b) => a.title.localeCompare(b.title));
+  const compare = sortOptions.find((option) => option.id === sort).compare;
+  const visible = source.filter((recipe) => selectedSubcategory === 'All' || recipe.subcategory === selectedSubcategory).sort(compare);
 
   const title = categoryId === 'all' ? 'All recipes' : category?.name || 'Recipe collection';
   const description = categoryId === 'all' ? 'Every recipe in one place. Pick a category or settle in and browse.' : category?.description;
@@ -404,15 +449,25 @@ function CategoryPage({ categoryId, recipes, categoriesMap, canEdit }) {
           </div>
         </div>
       </div>
-      {subcategories.length > 0 && (
-        <div className="mb-7 flex flex-wrap gap-2" aria-label="Filter by subcategory">
-          {['All', ...subcategories].map((subcategory) => (
-            <button key={subcategory} onClick={() => setSelectedSubcategory(subcategory)} className={`rounded-full px-4 py-2 text-xs font-semibold transition ${selectedSubcategory === subcategory ? 'bg-forest text-white' : 'bg-white text-forest/65 ring-1 ring-forest/10 hover:ring-forest/25'}`}>
-              {subcategory}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        {subcategories.length > 0 ? (
+          <div className="flex flex-wrap gap-2" aria-label="Filter by subcategory">
+            {['All', ...subcategories].map((subcategory) => (
+              <button key={subcategory} onClick={() => setSelectedSubcategory(subcategory)} className={`rounded-full px-4 py-2 text-xs font-semibold transition ${selectedSubcategory === subcategory ? 'bg-forest text-white' : 'bg-white text-forest/65 ring-1 ring-forest/10 hover:ring-forest/25'}`}>
+                {subcategory}
+              </button>
+            ))}
+          </div>
+        ) : <span />}
+        <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-forest/55">
+          Sort
+          <select value={sort} onChange={(event) => chooseSort(event.target.value)} className="rounded-full border border-forest/12 bg-white py-2 pl-3.5 pr-8 text-xs font-semibold text-forest outline-none transition focus:border-forest/40 focus:ring-2 focus:ring-sage-pale">
+            {sortOptions.map((option) => (
+              <option key={option.id} value={option.id}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
       {visible.length ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {visible.map((recipe) => (
@@ -459,7 +514,89 @@ function SectionLabel({ text, first, as: Tag = 'li' }) {
   return <Tag className={`list-none font-serif text-lg font-semibold text-forest ${first ? '' : 'pt-3'}`}>{text.replace(/:$/, '')}</Tag>;
 }
 
-function RecipePage({ recipe, categoriesMap, canEdit }) {
+function ratingSummary(average, count) {
+  return count ? `${formatRating(average)} out of 5 · ${count} ${count === 1 ? 'rating' : 'ratings'}` : 'No ratings yet';
+}
+
+// Average, count, and the signed-in person's own stars for one recipe.
+function RatingPanel({ recipe, rating, userId, onRated }) {
+  const online = useOnlineStatus();
+  const [mine, setMine] = useState({ id: null, stars: undefined });
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!userId || !online) return undefined;
+    let cancelled = false;
+    fetchMyRating(recipe.id, userId)
+      .then((stars) => !cancelled && setMine({ id: recipe.id, stars }))
+      .catch(() => !cancelled && setMine({ id: recipe.id, stars: null }));
+    return () => {
+      cancelled = true;
+    };
+  }, [recipe.id, userId, online]);
+
+  const myStars = mine.id === recipe.id ? mine.stars : undefined;
+
+  async function rate(stars) {
+    const previous = myStars;
+    setMine({ id: recipe.id, stars });
+    setStatus('saving');
+    setError('');
+    try {
+      onRated(recipe.id, await rateRecipe(recipe.id, stars));
+      setStatus('saved');
+    } catch (err) {
+      setMine({ id: recipe.id, stars: previous });
+      setStatus('idle');
+      setError(online ? err.message || 'Your rating could not be saved. Try again in a moment.' : 'You’re offline. Rating needs a connection.');
+    }
+  }
+
+  let action;
+  if (!userId) {
+    action = (
+      <a href="#/account" onClick={() => rememberSignInReturn()} className="inline-flex items-center gap-2 rounded-full bg-forest px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-forest-light">
+        Sign in to rate <Icon name="arrow" className="size-4" />
+      </a>
+    );
+  } else if (!online) {
+    action = <p className="text-sm text-forest/60">You’re offline. Rating needs a connection.</p>;
+  } else {
+    action = (
+      <div>
+        <StarInput value={myStars ?? null} onChange={(stars) => stars !== myStars && rate(stars)} disabled={myStars === undefined || status === 'saving'} />
+        <p className="mt-1 min-h-5 text-xs text-forest/55" role="status" aria-live="polite">
+          {myStars === undefined && 'Loading your rating…'}
+          {myStars === null && status !== 'saving' && 'Tap a star to rate it.'}
+          {myStars != null && status === 'saving' && 'Saving…'}
+          {myStars != null && status !== 'saving' && (
+            <>
+              {status === 'saved' ? 'Thanks! ' : ''}You gave it {myStars} {myStars === 1 ? 'star' : 'stars'}.{' '}
+              <button type="button" onClick={() => rate(null)} className="font-semibold text-coral underline-offset-2 hover:underline">Remove my rating</button>
+            </>
+          )}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section id="rate-recipe" className="mt-6 flex scroll-mt-24 flex-col gap-5 rounded-[1.65rem] bg-gold-pale/55 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+      <div>
+        <h2 className="font-serif text-2xl font-semibold text-forest">{myStars != null ? 'Your rating' : 'Made it? Rate it'}</h2>
+        <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-forest/65">
+          <Stars value={rating.ratingAverage || 0} className="size-4" />
+          {ratingSummary(rating.ratingAverage, rating.ratingCount)}
+        </p>
+      </div>
+      <div className="sm:text-right">{action}</div>
+      {error && <p role="alert" className="rounded-2xl bg-coral-pale px-4 py-3 text-sm text-forest sm:basis-full">{error}</p>}
+    </section>
+  );
+}
+
+function RecipePage({ recipe, categoriesMap, canEdit, rating, userId, onRated }) {
   const category = categoriesMap[recipe.category];
   const categoryName = category?.name || recipe.category;
   const meta = recipe.blocks.filter((block) => block.type === 'meta');
@@ -493,7 +630,11 @@ function RecipePage({ recipe, categoriesMap, canEdit }) {
           </div>
           <h1 className="max-w-4xl font-serif text-4xl font-semibold leading-[1.08] tracking-tight text-forest sm:text-5xl lg:text-[3.55rem]">{recipe.title}</h1>
           {recipe.source && <p className="mt-3 max-w-3xl font-serif text-lg italic leading-snug text-forest/65 sm:text-xl">From {recipe.source}</p>}
-          <p className="mt-4 flex items-center gap-2 text-sm text-forest/50">
+          <button type="button" onClick={() => document.getElementById('rate-recipe')?.scrollIntoView({ behavior: 'smooth' })} className="mt-4 flex items-center gap-2 text-sm text-forest/60 transition hover:text-forest">
+            <Stars value={rating.ratingAverage || 0} className="size-4" />
+            {ratingSummary(rating.ratingAverage, rating.ratingCount)}
+          </button>
+          <p className="mt-2 flex items-center gap-2 text-sm text-forest/50">
             <Icon name="book" className="size-4" /> Giant Book of Yum
             {recipe.sourcePage && (
               <>
@@ -571,6 +712,8 @@ function RecipePage({ recipe, categoriesMap, canEdit }) {
             </section>
           )}
 
+          <RatingPanel recipe={recipe} rating={rating} userId={userId} onRated={onRated} />
+
           {recipe.sourceText && (
             <details className="group mt-6 rounded-2xl border border-forest/10 bg-white/55 p-4 sm:p-5">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-forest marker:hidden">
@@ -637,8 +780,8 @@ function Footer() {
           <a href="#/offline" className="text-forest/40 transition hover:text-forest">
             Use offline
           </a>
-          <a href="#/admin" className="text-forest/40 transition hover:text-forest">
-            Admin
+          <a href="#/account" className="text-forest/40 transition hover:text-forest">
+            Account
           </a>
         </div>
       </div>
@@ -729,7 +872,14 @@ export default function App() {
   useEffect(() => {
     if (!isConfigured) return undefined;
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setSession(nextSession);
+      // Back to the page where "Sign in" was tapped (the email link lands on the home page).
+      if (event === 'SIGNED_IN') {
+        const target = takeSignInReturn();
+        if (target) setTimeout(() => (window.location.hash = target), 0);
+      }
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -758,6 +908,7 @@ export default function App() {
   }, []);
 
   const allCategories = useMemo(() => categoryRecipes(categories, recipes || []), [categories, recipes]);
+  const recipesById = useMemo(() => Object.fromEntries((recipes || []).map((recipe) => [recipe.id, recipe])), [recipes]);
   const categoriesMap = useMemo(() => Object.fromEntries(allCategories.map((category) => [category.id, category])), [allCategories]);
   const detailId = route.page === 'recipe' || route.page === 'edit' ? route.id : null;
   const detail = useRecipe(detailId, recipeVersion);
@@ -766,6 +917,10 @@ export default function App() {
     setRecipeVersion((version) => version + 1);
     loadCollection();
     window.location.hash = `#/recipe/${saved.id}`;
+  }
+
+  function handleRated(id, totals) {
+    setRecipes((current) => current?.map((recipe) => (recipe.id === id ? { ...recipe, ...totals } : recipe)));
   }
 
   function handleDeleted(deleted) {
@@ -781,14 +936,14 @@ export default function App() {
   let content;
   if (!isConfigured) content = <StatusMessage title="The recipe box isn't connected yet." message="Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local (install/supabase/write_env_local.sh writes them), then restart the dev server." />;
   else if (route.page === 'offline') content = <OfflinePage totalRecipes={recipes?.length} />;
-  else if (route.page === 'admin' && !online && !session) content = <StatusMessage title="Signing in needs a connection." message="You can still browse any recipes you’ve downloaded." />;
+  else if (route.page === 'account' && !online && !session) content = <StatusMessage title="Signing in needs a connection." message="You can still browse any recipes you’ve downloaded." />;
   else if (loadError && !online) content = <OfflineEmpty />;
   else if (loadError) content = <StatusMessage title="The recipe box is taking a moment." message="Refresh the page to load the collection." />;
-  else if (route.page === 'admin') content = <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
+  else if (route.page === 'account') content = <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
   else if (!recipes) content = <StatusMessage title="Opening the recipe box…" loading />;
-  else if (route.page === 'search') content = <SearchPage key={route.query} initialQuery={route.query} categoriesMap={categoriesMap} />;
+  else if (route.page === 'search') content = <SearchPage key={route.query} initialQuery={route.query} categoriesMap={categoriesMap} recipesById={recipesById} />;
   else if (route.page === 'home') content = <HomePage recipes={recipes} allCategories={allCategories} />;
-  else if (route.page === 'category') content = <CategoryPage categoryId={route.id} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} />;
+  else if (route.page === 'category') content = <CategoryPage key={`${route.id}/${route.sort || ''}`} categoryId={route.id} initialSort={route.sort} recipes={recipes} categoriesMap={categoriesMap} canEdit={canEdit} />;
   else if (['new', 'edit', 'import'].includes(route.page) && !online) content = <StatusMessage title="Editing needs a connection." message="Recipes you’ve downloaded are still here to read." />;
   else if (['new', 'edit', 'import'].includes(route.page) && !canEdit) {
     content = session ? <StatusMessage title="This account can't edit recipes." message="Ask the site owner to make you an admin." /> : <SignInPage session={session} canEdit={canEdit} onSignOut={signOut} />;
@@ -801,11 +956,11 @@ export default function App() {
   else if (detail.recipe === undefined) content = <StatusMessage title="Finding the recipe…" loading />;
   else if (!detail.recipe) content = <NotFound />;
   else if (route.page === 'edit') content = <RecipeEditor key={`${detail.recipe.id}-${recipeVersion}`} recipe={detail.recipe} categories={categories} summaries={recipes} onSaved={handleSaved} onDeleted={handleDeleted} />;
-  else content = <RecipePage recipe={detail.recipe} categoriesMap={categoriesMap} canEdit={canEdit} />;
+  else content = <RecipePage recipe={detail.recipe} categoriesMap={categoriesMap} canEdit={canEdit} rating={recipesById[detail.recipe.id] || {}} userId={userId} onRated={handleRated} />;
 
   return (
     <div className="min-h-screen bg-cream text-forest">
-      <Header canEdit={canEdit} page={route.page} />
+      <Header canEdit={canEdit} signedIn={Boolean(session)} page={route.page} />
       <OfflineBanner />
       {content}
       <Footer />

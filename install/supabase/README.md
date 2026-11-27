@@ -1,6 +1,6 @@
 # Supabase setup
 
-This folder is a [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) project. It moves the recipe collection from `data/recipes.json` into Postgres. Anyone can read recipes. Admins sign in with an emailed one-time link and can create, update, and delete them in the app.
+This folder is a [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started) project. It moves the recipe collection from `data/recipes.json` into Postgres. Anyone can read recipes. Anyone can sign in with an emailed one-time link to rate recipes; admins use the same sign-in to create, update, and delete them in the app.
 
 The scripts run the CLI with `--workdir install`, so `install/supabase/` acts as the project's `supabase/` folder. To run CLI commands yourself, use `supabase --workdir install <command>`.
 
@@ -39,7 +39,7 @@ This starts Supabase in Docker and runs `db reset` to rebuild the database from 
 
 | Path | Purpose |
 | --- | --- |
-| `config.jsonc` | Declares only the settings this project relies on: the seed path, site and redirect URLs, sign-ups off, email sign-in (links expire after 10 minutes). `config push` changes just these on the hosted project. Commented `smtp` and email template blocks are ready for a real mail server |
+| `config.jsonc` | Declares only the settings this project relies on: the seed path, site and redirect URLs, sign-ups on with email confirmation (so anyone can sign in to rate, but not with a made-up address), email sign-in (links expire after 10 minutes). `config push` changes just these on the hosted project. Commented `smtp` and email template blocks are ready for a real mail server |
 | `migrations/` | Schema (`categories`, `recipes`, `roles`, audit triggers, full-text `search` column), the ranked `search_recipes` function, public read RLS, and role-based write RLS |
 | `templates/magic_link.html` | A sign-in email that shows a 6-digit code (`{{ .Token }}`). Unused until custom SMTP is set up, because the free plan doesn't allow custom templates with the built-in mailer |
 | `seed_recipes.sh [--local] [--force] [--prune]` | Generates `seed.sql` from `data/recipes.json` and loads it. By default only new IDs are inserted, so database edits are kept. `--force` overwrites existing rows with the JSON. `--prune` deletes recipes the JSON no longer has, except ones created or saved in the app |
@@ -50,7 +50,7 @@ Scripts target the linked hosted project unless the first argument is `--local`.
 
 To change the schema, add a migration with `supabase --workdir install migration new <name>`, test it with `local.sh`, and then run `supabase --workdir install db push`.
 
-Supabase's built-in mailer only sends a few emails per hour. That's fine for a few admins; enable the `smtp` block in `config.jsonc` and run `config push` for more.
+Supabase's built-in mailer only sends a few emails per hour, shared by everyone signing in, so admins can be locked out of sign-in while it's used up. Now that anyone can sign in to rate, enable the `smtp` block in `config.jsonc` and run `config push` before sharing the site widely.
 
 ## Recipe photo import
 
@@ -79,8 +79,10 @@ Permissions live in `roles` as actor / object / predicate triples:
 
 RLS checks each row as an object, for example `recipe/baked-mushrooms-lindsey-fellars` or `category/desserts`, using `public.has_role(predicate, object)`. A grant matches when its object is `*`, the row's `<type>/*`, or the exact object. So `*` admins can write recipes and categories, and `recipe/*` admins can write recipes only. `roles` has no client write policies, so grants can only be managed with `add_admin.sh` or the SQL editor. To add a predicate or object type, write a migration that changes the `roles` check constraint, and update the allowed objects in `add_admin.sh`.
 
+Ratings live in `ratings`: one 1–5 rating per user per recipe, primary key `(recipe_id, user_id)`. A rating is visible only to the person who made it and to recipe admins, who can also remove it. The app calls `rate_recipe(p_recipe_id, p_stars)` to set a rating, or passes `null` to remove it. A trigger keeps `recipe_rating_stats` (count, sum, average) current, and anyone can read it; the app merges those totals into the recipe summaries. Deleting a recipe or an account removes the related ratings. `delete_my_account()` lets a signed-in person delete their own account from the account page.
+
 ## Using it from the app
 
-`src/supabase.js` creates the client from `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` and holds every query. The app loads categories and recipe summaries (no recipe text) on start, paging past PostgREST's 1,000-row limit, and fetches each recipe's full text when it is opened. Admins sign in at `#/admin` with `signInWithOtp` (PKCE flow, so the link returns with `?code=` and leaves the `#/` routes alone). The link must return to `SITE_URL` or one of `additional_redirect_urls`. The app calls `has_role('admin', 'recipe/*')` to decide whether to show the editing controls; RLS enforces the same rule on every write.
+`src/supabase.js` creates the client from `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` and holds every query. The app loads categories and recipe summaries (no recipe text) on start, paging past PostgREST's 1,000-row limit, and fetches each recipe's full text when it is opened. People sign in at `#/account` with `signInWithOtp` (PKCE flow, so the link returns with `?code=` and leaves the `#/` routes alone). The link must return to `SITE_URL` or one of `additional_redirect_urls`. The app calls `has_role('admin', 'recipe/*')` to decide whether to show the editing controls; RLS enforces the same rule on every write.
 
 For GitHub Pages builds, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as repository variables; `.github/workflows/deploy.yml` passes them to the build. The anon key is meant to be public, and RLS protects the data.
