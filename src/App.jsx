@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { RecipeEditor, SignInPage } from './Admin.jsx';
 import { ImportPage } from './Import.jsx';
 import { OfflineBanner, OfflineHeaderLink, OfflinePage, useOfflineAutoRefresh } from './Offline.jsx';
@@ -246,30 +246,57 @@ function CategoryCard({ category }) {
   );
 }
 
-function RecipeArt({ category, compact = false }) {
-  const tint = categoryDetails[category]?.tint || 'sage';
+function hashString(text) {
+  let hash = 0;
+  for (const char of text) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
+  return hash;
+}
+
+// Lighter or deeper versions of the category color, one per subcategory (in
+// name order within its category), so a page of desserts mixes cakes,
+// cookies, and pies at a glance. Six covers the largest category.
+const subcategoryShades = ['bg-white/50', 'bg-forest/[0.06]', 'bg-white/25', 'bg-forest/[0.1]', 'bg-white/10', 'bg-forest/[0.03]'];
+// Card details shared from App: subcategory shade positions and category names.
+const CardContext = createContext({ shades: {}, categoryNames: {} });
+
+function subcategoryShadeIndex(recipes) {
+  const byCategory = {};
+  for (const recipe of recipes) {
+    if (recipe.subcategory) (byCategory[recipe.category] ||= new Set()).add(recipe.subcategory);
+  }
+  const index = {};
+  for (const [category, names] of Object.entries(byCategory)) {
+    [...names].sort().forEach((name, position) => (index[`${category}/${name}`] = position));
+  }
+  return index;
+}
+
+// A slim accent band in the category's color and icon (as on the category
+// cards), shaded by subcategory. The rings shift with the recipe ID so
+// neighboring cards don't look identical.
+function RecipeBand({ recipe }) {
+  const { tint, icon } = { ...defaultCategoryDetails, ...categoryDetails[recipe.category] };
+  const hash = hashString(recipe.id);
+  const position = useContext(CardContext).shades[`${recipe.category}/${recipe.subcategory}`];
+  const shade = position === undefined ? '' : subcategoryShades[position % subcategoryShades.length];
   return (
-    <div className={`recipe-art tint-${tint} relative grid ${compact ? 'h-28' : 'h-36'} place-items-center overflow-hidden rounded-[1.2rem]`}>
-      <div className="absolute -right-5 -top-9 size-24 rounded-full border border-forest/10" />
-      <div className="absolute -bottom-10 -left-3 size-24 rounded-full border border-forest/10" />
-      <div className="relative grid aspect-square h-[70%] place-items-center rounded-full border border-forest/10 bg-white/45 shadow-inner">
-        <div className="grid aspect-square h-[75%] place-items-center rounded-full border-[5px] border-white/75 text-forest/70 shadow-sm">
-          <Icon name="bowl" className={compact ? 'size-7' : 'size-9'} />
-        </div>
-      </div>
-      <span className="absolute bottom-3 right-3 rounded-full bg-white/70 px-2.5 py-1 text-[0.58rem] font-bold uppercase tracking-[0.14em] text-forest/55">From the book</span>
+    <div className={`recipe-art tint-${tint} relative grid h-12 place-items-center overflow-hidden rounded-[1.1rem]`} aria-hidden="true">
+      {shade && <span className={`absolute inset-0 ${shade}`} />}
+      <span className="absolute -top-10 size-20 rounded-full border border-forest/10" style={{ left: `${4 + (hash % 34)}%` }} />
+      <span className="absolute -bottom-12 size-20 rounded-full border border-forest/10" style={{ left: `${50 + ((hash >>> 8) % 36)}%` }} />
+      <span className="relative grid size-8 place-items-center rounded-xl bg-white/70 font-serif text-lg text-forest shadow-sm">{icon}</span>
     </div>
   );
 }
 
 function RecipeCard({ recipe }) {
-  const category = { name: recipe.categoryName };
+  const categoryName = useContext(CardContext).categoryNames[recipe.category] || recipe.category;
   return (
     <a href={`#/recipe/${recipe.id}`} className="group flex h-full flex-col rounded-[1.55rem] border border-forest/8 bg-white p-3.5 shadow-sm shadow-forest/[0.025] transition duration-300 hover:-translate-y-1 hover:border-forest/15 hover:shadow-xl hover:shadow-forest/10 sm:p-4">
-      <RecipeArt category={recipe.category} compact />
+      <RecipeBand recipe={recipe} />
       <div className="flex flex-1 flex-col px-1 pb-1 pt-4">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-coral">{recipe.subcategory || category?.name || recipe.categoryName}</span>
+          <span className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-coral">{recipe.subcategory || categoryName}</span>
           {recipe.sourcePage && <span className="text-[0.68rem] text-forest/40">p. {recipe.sourcePage}</span>}
         </div>
         <h3 className="font-serif text-[1.16rem] font-semibold leading-snug text-forest transition group-hover:text-coral">{recipe.title}</h3>
@@ -620,7 +647,8 @@ function RecipePage({ recipe, categoriesMap, canEdit, rating, userId, onRated })
                 <Icon name="edit" className="size-3.5" /> Edit
               </a>
             )}
-            <a href={`#/category/${recipe.category}`} className={`category-pill tint-${category?.tint || 'sage'} rounded-full px-3.5 py-1.5 text-[0.67rem] font-bold uppercase tracking-[0.15em]`}>
+            <a href={`#/category/${recipe.category}`} className={`category-pill tint-${category?.tint || 'sage'} inline-flex items-center gap-1.5 rounded-full py-1.5 pl-2.5 pr-3.5 text-[0.67rem] font-bold uppercase tracking-[0.15em]`}>
+              <span aria-hidden="true" className="font-serif text-sm font-normal normal-case tracking-normal">{category?.icon || defaultCategoryDetails.icon}</span>
               {categoryName}
             </a>
             {recipe.subcategory && <span className="rounded-full bg-white px-3.5 py-1.5 text-[0.67rem] font-semibold text-forest/55 ring-1 ring-forest/8">{recipe.subcategory}</span>}
@@ -650,12 +678,8 @@ function RecipePage({ recipe, categoriesMap, canEdit, rating, userId, onRated })
             </div>
           )}
 
-          <div className="my-8 overflow-hidden rounded-[1.8rem]">
-            <RecipeArt category={recipe.category} />
-          </div>
-
           {hasStructuredParts ? (
-            <div className="grid gap-5 md:grid-cols-[minmax(0,.82fr)_minmax(0,1.18fr)]">
+            <div className="mt-8 grid gap-5 md:grid-cols-[minmax(0,.82fr)_minmax(0,1.18fr)]">
               <section className="rounded-[1.65rem] bg-sage-pale/65 p-5 sm:p-6">
                 <div className="mb-5 flex items-center justify-between">
                   <h2 className="font-serif text-2xl font-semibold text-forest">Ingredients</h2>
@@ -699,7 +723,7 @@ function RecipePage({ recipe, categoriesMap, canEdit, rating, userId, onRated })
               </section>
             </div>
           ) : (
-            <section className="rounded-[1.65rem] bg-white p-5 shadow-sm ring-1 ring-forest/8 sm:p-7">
+            <section className="mt-8 rounded-[1.65rem] bg-white p-5 shadow-sm ring-1 ring-forest/8 sm:p-7">
               <h2 className="mb-4 font-serif text-2xl font-semibold text-forest">Recipe notes</h2>
               <div className="space-y-3 text-sm leading-7 text-forest/70">
                 {bodyBlocks.map((block, index) => (
@@ -905,6 +929,10 @@ export default function App() {
   }, []);
 
   const allCategories = useMemo(() => categoryRecipes(categories, recipes || []), [categories, recipes]);
+  const cardContext = useMemo(
+    () => ({ shades: subcategoryShadeIndex(recipes || []), categoryNames: Object.fromEntries(categories.map((category) => [category.id, category.name])) }),
+    [recipes, categories],
+  );
   const recipesById = useMemo(() => Object.fromEntries((recipes || []).map((recipe) => [recipe.id, recipe])), [recipes]);
   const categoriesMap = useMemo(() => Object.fromEntries(allCategories.map((category) => [category.id, category])), [allCategories]);
   const detailId = route.page === 'recipe' || route.page === 'edit' ? route.id : null;
@@ -959,7 +987,7 @@ export default function App() {
     <div className="min-h-screen bg-cream text-forest">
       <Header canEdit={canEdit} signedIn={Boolean(session)} page={route.page} />
       <OfflineBanner />
-      {content}
+      <CardContext.Provider value={cardContext}>{content}</CardContext.Provider>
       <Footer />
     </div>
   );
