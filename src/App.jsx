@@ -301,9 +301,6 @@ function HomePage({ recipes, allCategories }) {
     <main>
       <section className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 pt-9 sm:px-8 sm:pb-20 sm:pt-14 lg:grid-cols-[1.02fr_.98fr] lg:gap-14 lg:px-12 lg:pb-24">
         <div className="relative z-10 max-w-2xl">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-forest/10 bg-white/70 px-3.5 py-2 text-xs font-semibold text-forest/65 shadow-sm">
-            <Icon name="spark" className="size-4 text-coral" /> Compiled by Lisa Jensen, with love
-          </div>
           <h1 className="font-serif text-[3.15rem] font-medium leading-[1.02] tracking-[-0.045em] text-forest sm:text-6xl lg:text-[4.45rem]">
             Good food brings <span className="italic text-coral">us</span> together.
           </h1>
