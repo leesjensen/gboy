@@ -272,14 +272,21 @@ function HomePage({ recipes, allCategories }) {
     const ids = ['warm-pizza-dip-from-good-housekeeping-jan-feb-2021-p-107', 'chicken-alfredo', 'easy-pumpkin-loaf', 'black-bean-soup'];
     return ids.map((id) => recipes.find((recipe) => recipe.id === id)).filter(Boolean);
   }, [recipes]);
-  const favorites = useMemo(() => recipes.filter((recipe) => recipe.ratingCount).sort(byRating).slice(0, 4), [recipes]);
+  const favorites = useMemo(
+    () =>
+      recipes
+        .filter((recipe) => recipe.ratingCount)
+        .sort(byRating)
+        .slice(0, 4),
+    [recipes],
+  );
 
   return (
     <main>
       <section className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-14 pt-9 sm:px-8 sm:pb-20 sm:pt-14 lg:grid-cols-[1.02fr_.98fr] lg:gap-14 lg:px-12 lg:pb-24">
         <div className="relative z-10 max-w-2xl">
           <h1 className="font-serif text-[3.15rem] font-medium leading-[1.02] tracking-[-0.045em] text-forest sm:text-6xl lg:text-[4.45rem]">
-            Good food brings <span className="italic text-coral">us</span> together.
+            Good food brings <span className="italic text-coral">Jensens</span> together.
           </h1>
           <p className="mt-6 max-w-xl text-base leading-7 text-forest/65 sm:text-lg sm:leading-8">Recipes collected by Lisa Jensen from many sources over the years to share with her children, with love. Find an old favorite, choose something new, and make room for one more at the table.</p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -437,12 +444,16 @@ function CategoryPage({ categoryId, initialSort, recipes, categoriesMap, canEdit
               </button>
             ))}
           </div>
-        ) : <span />}
+        ) : (
+          <span />
+        )}
         <label className="flex shrink-0 items-center gap-2 text-xs font-semibold text-forest/55">
           Sort
           <select value={sort} onChange={(event) => chooseSort(event.target.value)} className="rounded-full border border-forest/12 bg-white py-2 pl-3.5 pr-8 text-xs font-semibold text-forest outline-none transition focus:border-forest/40 focus:ring-2 focus:ring-sage-pale">
             {sortOptions.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
             ))}
           </select>
         </label>
@@ -552,7 +563,9 @@ function RatingPanel({ recipe, rating, userId, onRated }) {
           {myStars != null && status !== 'saving' && (
             <>
               {status === 'saved' ? 'Thanks! ' : ''}You gave it {myStars} {myStars === 1 ? 'star' : 'stars'}.{' '}
-              <button type="button" onClick={() => rate(null)} className="font-semibold text-coral underline-offset-2 hover:underline">Remove my rating</button>
+              <button type="button" onClick={() => rate(null)} className="font-semibold text-coral underline-offset-2 hover:underline">
+                Remove my rating
+              </button>
             </>
           )}
         </p>
@@ -570,7 +583,11 @@ function RatingPanel({ recipe, rating, userId, onRated }) {
         </p>
       </div>
       <div className="sm:text-right">{action}</div>
-      {error && <p role="alert" className="rounded-2xl bg-coral-pale px-4 py-3 text-sm text-forest sm:basis-full">{error}</p>}
+      {error && (
+        <p role="alert" className="rounded-2xl bg-coral-pale px-4 py-3 text-sm text-forest sm:basis-full">
+          {error}
+        </p>
+      )}
     </section>
   );
 }
@@ -603,7 +620,9 @@ function RecipePage({ recipe, categoriesMap, canEdit, rating, userId, onRated })
               </a>
             )}
             <a href={`#/category/${recipe.category}`} className={`category-pill tint-${category?.tint || 'sage'} inline-flex items-center gap-1.5 rounded-full py-1.5 pl-2.5 pr-3.5 text-[0.67rem] font-bold uppercase tracking-[0.15em]`}>
-              <span aria-hidden="true" className="font-serif text-sm font-normal normal-case tracking-normal">{category?.icon || defaultCategoryDetails.icon}</span>
+              <span aria-hidden="true" className="font-serif text-sm font-normal normal-case tracking-normal">
+                {category?.icon || defaultCategoryDetails.icon}
+              </span>
               {categoryName}
             </a>
             {recipe.subcategory && <span className="rounded-full bg-white px-3.5 py-1.5 text-[0.67rem] font-semibold text-forest/55 ring-1 ring-forest/8">{recipe.subcategory}</span>}
@@ -789,7 +808,13 @@ function OfflineEmpty() {
           <Icon name="cloud-off" className="size-6" />
         </span>
         <h1 className="font-serif text-2xl font-semibold text-forest sm:text-3xl">You’re offline.</h1>
-        <p className="mt-3 text-sm leading-6 text-forest/60">The recipes haven’t been downloaded to this device yet. Next time you’re connected, open <a href="#/offline" className="font-semibold text-coral">Use offline</a> and download them to read GBoy anywhere.</p>
+        <p className="mt-3 text-sm leading-6 text-forest/60">
+          The recipes haven’t been downloaded to this device yet. Next time you’re connected, open{' '}
+          <a href="#/offline" className="font-semibold text-coral">
+            Use offline
+          </a>{' '}
+          and download them to read GBoy anywhere.
+        </p>
       </div>
     </main>
   );
@@ -889,10 +914,7 @@ export default function App() {
   }, []);
 
   const allCategories = useMemo(() => categoryRecipes(categories, recipes || []), [categories, recipes]);
-  const cardContext = useMemo(
-    () => ({ shades: subcategoryShadeIndex(recipes || []), categories: Object.fromEntries(categories.map((category) => [category.id, withCategoryDefaults(category)])) }),
-    [recipes, categories],
-  );
+  const cardContext = useMemo(() => ({ shades: subcategoryShadeIndex(recipes || []), categories: Object.fromEntries(categories.map((category) => [category.id, withCategoryDefaults(category)])) }), [recipes, categories]);
   const recipesById = useMemo(() => Object.fromEntries((recipes || []).map((recipe) => [recipe.id, recipe])), [recipes]);
   const categoriesMap = useMemo(() => Object.fromEntries(allCategories.map((category) => [category.id, category])), [allCategories]);
   const detailId = route.page === 'recipe' || route.page === 'edit' ? route.id : null;
